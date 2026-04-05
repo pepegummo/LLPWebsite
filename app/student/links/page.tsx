@@ -127,7 +127,7 @@ export default function StudentLinksPage() {
                   </Label>
                   <Input
                     id="link-url"
-                    placeholder="เช่น roblox.com หรือ https://..."
+                    placeholder="เช่น google.com หรือ https://..."
                     value={newUrl}
                     onChange={(e) => setNewUrl(e.target.value)}
                     onKeyDown={(e) => {

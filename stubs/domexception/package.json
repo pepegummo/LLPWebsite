@@ -1,0 +1,7 @@
+{
+  "name": "domexception-native-stub",
+  "version": "1.0.0",
+  "description": "Stub that re-exports the platform's native DOMException",
+  "main": "index.js",
+  "license": "MIT"
+}

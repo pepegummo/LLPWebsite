@@ -18,6 +18,7 @@ import {
   ClipboardList,
   Link2,
   CalendarDays,
+  MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -48,6 +49,11 @@ const studentNavItems: NavItem[] = [
     label: "ลิงก์",
     href: "/student/links",
     icon: <Link2 className="w-4 h-4" />,
+  },
+  {
+    label: "Group Chat",
+    href: "/student/chat",
+    icon: <MessageCircle className="w-4 h-4" />,
   },
   {
     label: "ทีม",

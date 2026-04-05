@@ -264,9 +264,14 @@ export function TaskCard({ task }: TaskCardProps) {
                       ) : (
                         <Square className="w-3.5 h-3.5 shrink-0" />
                       )}
-                      <span className={cn(st.completed && "line-through")}>
+                      <span className={cn("flex-1", st.completed && "line-through")}>
                         {st.title}
                       </span>
+                      {st.manHours != null && st.manHours > 0 && (
+                        <span className="ml-auto shrink-0 text-muted-foreground/70">
+                          {st.manHours}ชม.
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>

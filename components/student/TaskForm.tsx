@@ -23,7 +23,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { PlusCircle, Trash2, Link, CheckSquare, Square } from "lucide-react";
+import { PlusCircle, Trash2, Link, CheckSquare, Square, Clock } from "lucide-react";
 
 function generateId() {
   return Math.random().toString(36).substring(2, 11);
@@ -114,13 +114,23 @@ export function TaskForm({
     if (!newSubTaskTitle.trim()) return;
     setSubTasks((prev) => [
       ...prev,
-      { id: generateId(), title: newSubTaskTitle.trim(), completed: false },
+      { id: generateId(), title: newSubTaskTitle.trim(), completed: false, manHours: undefined },
     ]);
     setNewSubTaskTitle("");
   };
 
   const handleRemoveSubTask = (id: string) => {
     setSubTasks((prev) => prev.filter((st) => st.id !== id));
+  };
+
+  const handleUpdateSubTaskHours = (id: string, value: string) => {
+    setSubTasks((prev) =>
+      prev.map((st) =>
+        st.id === id
+          ? { ...st, manHours: value ? parseFloat(value) : undefined }
+          : st
+      )
+    );
   };
 
   const handleSave = () => {
@@ -134,6 +144,7 @@ export function TaskForm({
       (id) => !prevAssigneeIds.includes(id)
     );
 
+    const subtaskHoursSum = subTasks.reduce((s, st) => s + (st.manHours ?? 0), 0);
     const task: Task = {
       id: initialTask?.id ?? generateId(),
       groupId,
@@ -144,7 +155,10 @@ export function TaskForm({
       attachments,
       dueDate: dueDate || null,
       createdAt: initialTask?.createdAt ?? new Date().toISOString(),
-      manHours: manHours ? parseFloat(manHours) : null,
+      manHours:
+        subTasks.length > 0
+          ? subtaskHoursSum > 0 ? subtaskHoursSum : null
+          : manHours ? parseFloat(manHours) : null,
       subTasks,
     };
 
@@ -234,15 +248,25 @@ export function TaskForm({
             </div>
             <div className="space-y-1">
               <Label htmlFor="man-hours">Man Hours</Label>
-              <Input
-                id="man-hours"
-                type="number"
-                min="0"
-                step="0.5"
-                value={manHours}
-                onChange={(e) => setManHours(e.target.value)}
-                placeholder="จำนวนชั่วโมง"
-              />
+              {subTasks.length > 0 ? (
+                <div className="flex items-center gap-1.5 h-9 px-3 bg-muted rounded-md text-sm text-muted-foreground">
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    {subTasks.reduce((s, st) => s + (st.manHours ?? 0), 0)} ชม.
+                    <span className="text-xs ml-1">(รวมจาก sub-tasks)</span>
+                  </span>
+                </div>
+              ) : (
+                <Input
+                  id="man-hours"
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={manHours}
+                  onChange={(e) => setManHours(e.target.value)}
+                  placeholder="จำนวนชั่วโมง"
+                />
+              )}
             </div>
           </div>
 
@@ -302,6 +326,15 @@ export function TaskForm({
                 className="flex items-center gap-2 bg-muted rounded-md px-3 py-1.5"
               >
                 <span className="flex-1 text-sm truncate">{st.title}</span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={st.manHours?.toString() ?? ""}
+                  onChange={(e) => handleUpdateSubTaskHours(st.id, e.target.value)}
+                  placeholder="ชม."
+                  className="w-20 h-7 text-xs px-2"
+                />
                 <Button
                   type="button"
                   variant="ghost"
@@ -374,7 +407,7 @@ export function TaskForm({
                 className="flex-1"
               />
               <Input
-                placeholder="URL (เช่น roblox.com)"
+                placeholder="URL (เช่น google.com)"
                 value={attachUrl}
                 onChange={(e) => setAttachUrl(e.target.value)}
                 onKeyDown={(e) => {

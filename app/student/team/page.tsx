@@ -48,7 +48,10 @@ export default function StudentTeamPage() {
 
     const memberHours: Record<string, number> = {};
     members.forEach((m) => {
-      memberHours[m.id] = 0;
+      const doneHours = groupTasks
+        .filter((t) => t.status === "done" && t.assigneeIds.includes(m.id))
+        .reduce((s, t) => s + (t.manHours ?? 1), 0);
+      memberHours[m.id] = doneHours;
     });
 
     sorted.forEach((task) => {

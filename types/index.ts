@@ -34,6 +34,7 @@ export interface SubTask {
   id: string;
   title: string;
   completed: boolean;
+  manHours?: number;
 }
 
 export interface Task {
@@ -82,9 +83,27 @@ export interface Evaluation {
 export interface Notification {
   id: string;
   userId: string;
-  type: "invitation" | "task_assigned" | "eval_reminder" | "invite_response";
+  type: "invitation" | "task_assigned" | "eval_reminder" | "invite_response" | "mention";
   message: string;
   read: boolean;
   createdAt: string;
   meta?: Record<string, string>;
+}
+
+export interface ChatChannel {
+  id: string;
+  groupId: string;
+  name: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  channelId: string;
+  groupId: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+  mentions: string[];
 }
