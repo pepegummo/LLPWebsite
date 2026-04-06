@@ -251,29 +251,41 @@ export function TaskCard({ task }: TaskCardProps) {
 
               {/* Sub-tasks */}
               {hasSubTasks && (
-                <div className="mt-2 space-y-1">
-                  {task.subTasks.map((st) => (
-                    <button
-                      key={st.id}
-                      type="button"
-                      onClick={() => handleToggleSubTask(st.id)}
-                      className="flex items-center gap-1.5 text-xs w-full text-left hover:text-foreground text-muted-foreground"
-                    >
-                      {st.completed ? (
-                        <CheckSquare className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                      ) : (
-                        <Square className="w-3.5 h-3.5 shrink-0" />
-                      )}
-                      <span className={cn("flex-1", st.completed && "line-through")}>
-                        {st.title}
-                      </span>
-                      {st.manHours != null && st.manHours > 0 && (
-                        <span className="ml-auto shrink-0 text-muted-foreground/70">
-                          {st.manHours}ชม.
-                        </span>
-                      )}
-                    </button>
-                  ))}
+                <div className="mt-2 space-y-1.5">
+                  {task.subTasks.map((st) => {
+                    const subAssignees = (st.assigneeIds ?? [])
+                      .map((id) => mockUsers.find((u) => u.id === id))
+                      .filter(Boolean) as (typeof mockUsers)[0][];
+                    return (
+                      <div key={st.id}>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleSubTask(st.id)}
+                          className="flex items-center gap-1.5 text-xs w-full text-left hover:text-foreground text-muted-foreground"
+                        >
+                          {st.completed ? (
+                            <CheckSquare className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                          ) : (
+                            <Square className="w-3.5 h-3.5 shrink-0" />
+                          )}
+                          <span className={cn("flex-1", st.completed && "line-through")}>
+                            {st.title}
+                          </span>
+                          {st.manHours != null && st.manHours > 0 && (
+                            <span className="shrink-0 text-muted-foreground/70">
+                              {st.manHours}ชม.
+                            </span>
+                          )}
+                        </button>
+                        {subAssignees.length > 0 && (
+                          <p className="text-[10px] text-muted-foreground/70 ml-5 flex items-center gap-0.5">
+                            <Users className="w-2.5 h-2.5" />
+                            {subAssignees.map((a) => a.name).join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 

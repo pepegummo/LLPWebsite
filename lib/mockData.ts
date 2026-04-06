@@ -1,4 +1,4 @@
-import { User, Course, Group, Task, Evaluation, Notification } from "@/types";
+import { User, Course, Group, Task, Evaluation, Notification, Meeting } from "@/types";
 
 export const mockUsers: User[] = [
   {
@@ -111,10 +111,10 @@ export const mockTasks: Task[] = [
     attachments: [],
     dueDate: "2026-04-10",
     createdAt: "2026-03-05T10:00:00Z",
-    manHours: 12,
+    manHours: 10,
     subTasks: [
-      { id: "st1", title: "ออกแบบตาราง User", completed: true },
-      { id: "st2", title: "ออกแบบตาราง Task", completed: false },
+      { id: "st1", title: "ออกแบบตาราง User", completed: true, manHours: 4, assigneeIds: ["student2"] },
+      { id: "st2", title: "ออกแบบตาราง Task", completed: false, manHours: 6, assigneeIds: ["student1"] },
     ],
   },
   {
@@ -127,8 +127,12 @@ export const mockTasks: Task[] = [
     attachments: [],
     dueDate: "2026-04-20",
     createdAt: "2026-03-10T11:00:00Z",
-    manHours: 16,
-    subTasks: [],
+    manHours: null,
+    subTasks: [
+      { id: "st3", title: "สร้าง Navbar Component", completed: false, manHours: 3, assigneeIds: ["student3"] },
+      { id: "st4", title: "สร้าง Dashboard Layout", completed: false, manHours: 5, assigneeIds: ["student3"] },
+      { id: "st5", title: "สร้าง Task Card Component", completed: false, manHours: 4, assigneeIds: ["student1", "student3"] },
+    ],
   },
   {
     id: "task4",
@@ -168,8 +172,12 @@ export const mockTasks: Task[] = [
     attachments: [],
     dueDate: "2026-04-15",
     createdAt: "2026-03-08T10:00:00Z",
-    manHours: 20,
-    subTasks: [],
+    manHours: null,
+    subTasks: [
+      { id: "st6", title: "สร้าง Authentication API", completed: true, manHours: 8, assigneeIds: ["student5"] },
+      { id: "st7", title: "สร้าง Task API", completed: false, manHours: 6, assigneeIds: ["student5"] },
+      { id: "st8", title: "สร้าง Group API", completed: false, manHours: 6, assigneeIds: ["student4", "student5"] },
+    ],
   },
 ];
 
@@ -180,6 +188,14 @@ export const mockEvaluations: Evaluation[] = [
     evaluatorId: "student1",
     evaluateeId: "student2",
     score: 4,
+    criteriaScores: {
+      contribution: 4,
+      qualityOfWork: 4,
+      responsibility: 5,
+      communication: 4,
+      teamwork: 4,
+      effort: 3,
+    },
     comment: "ทำงานได้ดี มีความรับผิดชอบสูง",
     submittedAt: "2026-04-01T10:00:00Z",
   },
@@ -189,6 +205,14 @@ export const mockEvaluations: Evaluation[] = [
     evaluatorId: "student1",
     evaluateeId: "student3",
     score: 5,
+    criteriaScores: {
+      contribution: 5,
+      qualityOfWork: 5,
+      responsibility: 5,
+      communication: 5,
+      teamwork: 5,
+      effort: 5,
+    },
     comment: "เก่งมาก ช่วยเหลือเพื่อนตลอดเวลา",
     submittedAt: "2026-04-01T10:30:00Z",
   },
@@ -198,8 +222,48 @@ export const mockEvaluations: Evaluation[] = [
     evaluatorId: "student2",
     evaluateeId: "student1",
     score: 3,
+    criteriaScores: {
+      contribution: 3,
+      qualityOfWork: 3,
+      responsibility: 4,
+      communication: 3,
+      teamwork: 3,
+      effort: 2,
+    },
     comment: "ทำงานได้ปานกลาง",
     submittedAt: "2026-04-02T09:00:00Z",
+  },
+];
+
+export const mockMeetings: Meeting[] = [
+  {
+    id: "meeting1",
+    groupId: "group1",
+    topic: "ประชุมวางแผนโปรเจกต์",
+    description: "หารือเรื่องการแบ่งงานและ timeline ของโปรเจกต์",
+    attendeeIds: ["student1", "student2", "student3"],
+    link: "https://meet.google.com/abc-defg-hij",
+    datetime: "2026-04-10T14:00:00Z",
+    notificationSettings: [
+      { id: "ns1", minutesBefore: 1440, label: "1 วันก่อน" },
+      { id: "ns2", minutesBefore: 60, label: "1 ชั่วโมงก่อน" },
+    ],
+    createdBy: "student1",
+    createdAt: "2026-04-05T09:00:00Z",
+  },
+  {
+    id: "meeting2",
+    groupId: "group1",
+    topic: "รีวิว Database Schema",
+    description: "ตรวจสอบและแก้ไข schema ที่ออกแบบไว้",
+    attendeeIds: ["student1", "student2"],
+    link: "https://zoom.us/j/1234567890",
+    datetime: "2026-04-15T10:00:00Z",
+    notificationSettings: [
+      { id: "ns3", minutesBefore: 180, label: "3 ชั่วโมงก่อน" },
+    ],
+    createdBy: "student2",
+    createdAt: "2026-04-06T08:00:00Z",
   },
 ];
 
@@ -239,5 +303,23 @@ export const mockNotifications: Notification[] = [
     read: false,
     createdAt: "2026-03-01T10:00:00Z",
     meta: { groupId: "group1" },
+  },
+  {
+    id: "notif5",
+    userId: "student1",
+    type: "meeting_reminder",
+    message: "การประชุม 'ประชุมวางแผนโปรเจกต์' จะเริ่มใน 1 วัน",
+    read: false,
+    createdAt: "2026-04-09T14:00:00Z",
+    meta: { groupId: "group1", meetingId: "meeting1" },
+  },
+  {
+    id: "notif6",
+    userId: "student2",
+    type: "meeting_reminder",
+    message: "การประชุม 'ประชุมวางแผนโปรเจกต์' จะเริ่มใน 1 วัน",
+    read: false,
+    createdAt: "2026-04-09T14:00:00Z",
+    meta: { groupId: "group1", meetingId: "meeting1" },
   },
 ];

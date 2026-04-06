@@ -6,3 +6,5 @@ export { useNotificationStore } from "./notificationStore";
 export { useActivityStore } from "./activityStore";
 export { useLinkStore } from "./linkStore";
 export { useChatStore } from "./chatStore";
+export { useMeetingStore } from "./meetingStore";
+export { useRubricStore, DEFAULT_RUBRIC_WEIGHTS } from "./rubricStore";

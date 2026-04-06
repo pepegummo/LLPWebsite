@@ -60,11 +60,11 @@ export default function StaffSetupPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">ตั้งค่ากลุ่ม</h1>
-          <p className="text-muted-foreground">จัดการกลุ่มและสมาชิก</p>
+          <h1 className="text-2xl font-bold">จัดการกลุ่ม</h1>
+          <p className="text-muted-foreground">ตั้งค่ากลุ่ม จัดการสมาชิก และส่งคำเชิญ</p>
         </div>
         <Button onClick={() => setCreateOpen(true)} size="sm">
           <PlusCircle className="w-4 h-4 mr-2" />

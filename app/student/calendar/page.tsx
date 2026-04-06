@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useAuthStore, useTaskStore, useGroupStore } from "@/store";
-import { Task } from "@/types";
+import { useAuthStore, useTaskStore, useGroupStore, useMeetingStore } from "@/store";
+import { Task, Meeting } from "@/types";
 import { mockUsers } from "@/lib/mockData";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,8 @@ import {
   ChevronRight,
   Clock,
   User,
+  Video,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -43,10 +45,17 @@ function statusLabel(status: string) {
   return "รอดำเนินการ";
 }
 
+function normalizeUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `https://${url}`;
+}
+
 export default function StudentCalendarPage() {
   const { currentUser } = useAuthStore();
   const { tasks } = useTaskStore();
   const { groups } = useGroupStore();
+  const { meetings } = useMeetingStore();
 
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -59,6 +68,7 @@ export default function StudentCalendarPage() {
   const activeGroupId = currentUser.activeGroupId;
   const activeGroup = groups.find((g) => g.id === activeGroupId);
   const groupTasks = tasks.filter((t) => t.groupId === activeGroupId);
+  const groupMeetings = meetings.filter((m) => m.groupId === activeGroupId);
 
   const prevMonth = () => {
     if (month === 0) {
@@ -87,6 +97,12 @@ export default function StudentCalendarPage() {
     return d.getFullYear() === year && d.getMonth() === month;
   });
 
+  // Meetings in this month
+  const meetingsThisMonth = groupMeetings.filter((m) => {
+    const d = new Date(m.datetime);
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+
   // Map day → tasks
   const tasksByDay: Record<number, Task[]> = {};
   tasksThisMonth.forEach((t) => {
@@ -95,10 +111,19 @@ export default function StudentCalendarPage() {
     tasksByDay[day].push(t);
   });
 
+  // Map day → meetings
+  const meetingsByDay: Record<number, Meeting[]> = {};
+  meetingsThisMonth.forEach((m) => {
+    const day = new Date(m.datetime).getDate();
+    if (!meetingsByDay[day]) meetingsByDay[day] = [];
+    meetingsByDay[day].push(m);
+  });
+
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfMonth(year, month);
 
   const selectedDayTasks = selectedDay ? (tasksByDay[selectedDay] ?? []) : [];
+  const selectedDayMeetings = selectedDay ? (meetingsByDay[selectedDay] ?? []) : [];
 
   // --- Timeline: tasks sorted by due date ---
   const timelineTasks = [...groupTasks]
@@ -207,6 +232,7 @@ export default function StudentCalendarPage() {
                     {Array.from({ length: daysInMonth }).map((_, i) => {
                       const day = i + 1;
                       const dayTasks = tasksByDay[day] ?? [];
+                      const dayMeetings = meetingsByDay[day] ?? [];
                       const isToday =
                         today.getDate() === day &&
                         today.getMonth() === month &&
@@ -236,7 +262,7 @@ export default function StudentCalendarPage() {
                             {day}
                           </span>
                           <div className="flex flex-col gap-0.5 mt-0.5 overflow-hidden">
-                            {dayTasks.slice(0, 2).map((t) => (
+                            {dayTasks.slice(0, 1).map((t) => (
                               <span
                                 key={t.id}
                                 className={cn(
@@ -247,9 +273,17 @@ export default function StudentCalendarPage() {
                                 {t.title}
                               </span>
                             ))}
-                            {dayTasks.length > 2 && (
+                            {dayMeetings.slice(0, 1).map((m) => (
+                              <span
+                                key={m.id}
+                                className="text-[10px] px-1 rounded truncate text-white bg-violet-500"
+                              >
+                                📹 {m.topic}
+                              </span>
+                            ))}
+                            {(dayTasks.length + dayMeetings.length) > 2 && (
                               <span className="text-[10px] text-muted-foreground">
-                                +{dayTasks.length - 2} อื่นๆ
+                                +{dayTasks.length + dayMeetings.length - 2} อื่นๆ
                               </span>
                             )}
                           </div>
@@ -260,62 +294,114 @@ export default function StudentCalendarPage() {
                 </CardContent>
               </Card>
 
-              {/* Selected day tasks */}
+              {/* Selected day details */}
               {selectedDay !== null && (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <h3 className="font-semibold text-sm">
-                    งานครบกำหนด {selectedDay} {MONTHS_TH[month]} {year + 543}
-                    {" "}({selectedDayTasks.length} งาน)
+                    {selectedDay} {MONTHS_TH[month]} {year + 543}
+                    {" "}({selectedDayTasks.length} งาน, {selectedDayMeetings.length} ประชุม)
                   </h3>
-                  {selectedDayTasks.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">ไม่มีงานวันนี้</p>
-                  ) : (
-                    selectedDayTasks.map((task) => {
-                      const assignees = task.assigneeIds
-                        .map((id) => mockUsers.find((u) => u.id === id))
-                        .filter(Boolean);
-                      return (
-                        <Card key={task.id}>
-                          <CardContent className="p-3">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <p className="font-medium text-sm">{task.title}</p>
-                                {assignees.length > 0 && (
-                                  <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                                    <User className="w-3 h-3" />
-                                    {assignees.map((a) => a!.name).join(", ")}
-                                  </p>
-                                )}
-                                {task.manHours != null && (
-                                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                    <Clock className="w-3 h-3" />
-                                    {task.manHours} ชม.
-                                  </p>
-                                )}
+
+                  {/* Tasks */}
+                  {selectedDayTasks.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">งานครบกำหนด</p>
+                      {selectedDayTasks.map((task) => {
+                        const assignees = task.assigneeIds
+                          .map((id) => mockUsers.find((u) => u.id === id))
+                          .filter(Boolean);
+                        return (
+                          <Card key={task.id}>
+                            <CardContent className="p-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="font-medium text-sm">{task.title}</p>
+                                  {assignees.length > 0 && (
+                                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                                      <User className="w-3 h-3" />
+                                      {assignees.map((a) => a!.name).join(", ")}
+                                    </p>
+                                  )}
+                                  {task.manHours != null && (
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                      <Clock className="w-3 h-3" />
+                                      {task.manHours} ชม.
+                                    </p>
+                                  )}
+                                </div>
+                                <Badge
+                                  variant={
+                                    task.status === "done"
+                                      ? "default"
+                                      : task.status === "in_progress"
+                                      ? "secondary"
+                                      : "outline"
+                                  }
+                                  className="text-xs shrink-0"
+                                >
+                                  {statusLabel(task.status)}
+                                </Badge>
                               </div>
-                              <Badge
-                                variant={
-                                  task.status === "done"
-                                    ? "default"
-                                    : task.status === "in_progress"
-                                    ? "secondary"
-                                    : "outline"
-                                }
-                                className="text-xs shrink-0"
-                              >
-                                {statusLabel(task.status)}
-                              </Badge>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Meetings */}
+                  {selectedDayMeetings.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">การประชุม</p>
+                      {selectedDayMeetings.map((meeting) => {
+                        const attendees = meeting.attendeeIds
+                          .map((id) => mockUsers.find((u) => u.id === id))
+                          .filter(Boolean);
+                        const time = new Date(meeting.datetime).toLocaleTimeString("th-TH", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        });
+                        return (
+                          <Card key={meeting.id} className="border-violet-200 bg-violet-50">
+                            <CardContent className="p-3">
+                              <div className="flex items-start gap-2">
+                                <Video className="w-4 h-4 text-violet-600 shrink-0 mt-0.5" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-sm">{meeting.topic}</p>
+                                  <p className="text-xs text-muted-foreground">{time}</p>
+                                  {attendees.length > 0 && (
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {attendees.map((a) => a!.name).join(", ")}
+                                    </p>
+                                  )}
+                                  {meeting.link && (
+                                    <a
+                                      href={normalizeUrl(meeting.link)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-1 text-xs text-primary hover:underline mt-1"
+                                    >
+                                      <ExternalLink className="w-3 h-3" />
+                                      เข้าร่วมประชุม
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {selectedDayTasks.length === 0 && selectedDayMeetings.length === 0 && (
+                    <p className="text-sm text-muted-foreground">ไม่มีกิจกรรมในวันนี้</p>
                   )}
                 </div>
               )}
 
               {/* Legend */}
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded bg-slate-400 inline-block" />
                   รอดำเนินการ
@@ -327,6 +413,10 @@ export default function StudentCalendarPage() {
                 <span className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded bg-green-500 inline-block" />
                   เสร็จสิ้น
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded bg-violet-500 inline-block" />
+                  การประชุม
                 </span>
               </div>
             </div>
@@ -359,7 +449,7 @@ export default function StudentCalendarPage() {
                       ))}
                     </div>
 
-                    {/* Timeline rows */}
+                    {/* Timeline rows — tasks */}
                     <div className="space-y-2">
                       {groupTasks.filter((t) => t.dueDate).map((task) => {
                         const barStyle = getBarStyle(task);
@@ -406,13 +496,45 @@ export default function StudentCalendarPage() {
                           </div>
                         );
                       })}
+
+                      {/* Meeting markers */}
+                      {groupMeetings
+                        .filter((m) => {
+                          const d = new Date(m.datetime);
+                          return d.getFullYear() === year && d.getMonth() === month;
+                        })
+                        .map((meeting) => {
+                          const d = new Date(meeting.datetime);
+                          const dayOfMonth = d.getDate();
+                          const leftPct = ((dayOfMonth - 1) / totalDays) * 100;
+
+                          return (
+                            <div key={meeting.id} className="flex items-center gap-2">
+                              <div className="w-40 shrink-0 pr-2">
+                                <p className="text-xs font-medium truncate text-violet-600">
+                                  📹 {meeting.topic}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
+                                </p>
+                              </div>
+                              <div className="flex-1 relative h-7 bg-muted rounded">
+                                <div
+                                  className="absolute h-full w-1 bg-violet-500 rounded"
+                                  style={{ left: `${leftPct}%` }}
+                                  title={`${meeting.topic} — ${d.toLocaleDateString("th-TH")}`}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
                     </div>
                   </CardContent>
                 </Card>
               )}
 
               {/* Legend */}
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded bg-slate-400 inline-block" />
                   รอดำเนินการ
@@ -428,6 +550,10 @@ export default function StudentCalendarPage() {
                 <span className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded bg-destructive inline-block" />
                   เกินกำหนด
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded bg-violet-500 inline-block" />
+                  การประชุม
                 </span>
               </div>
             </div>

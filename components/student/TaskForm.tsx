@@ -23,7 +23,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { PlusCircle, Trash2, Link, CheckSquare, Square, Clock } from "lucide-react";
+import { PlusCircle, Trash2, Link, CheckSquare, Square, Clock, ChevronDown, ChevronUp, Users } from "lucide-react";
 
 function generateId() {
   return Math.random().toString(36).substring(2, 11);
@@ -82,10 +82,26 @@ export function TaskForm({
     initialTask?.subTasks ?? []
   );
   const [newSubTaskTitle, setNewSubTaskTitle] = useState("");
+  const [expandedSubTask, setExpandedSubTask] = useState<string | null>(null);
 
   const toggleAssignee = (userId: string) => {
     setAssigneeIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const toggleSubTaskAssignee = (subTaskId: string, userId: string) => {
+    setSubTasks((prev) =>
+      prev.map((st) => {
+        if (st.id !== subTaskId) return st;
+        const currentIds = st.assigneeIds ?? [];
+        return {
+          ...st,
+          assigneeIds: currentIds.includes(userId)
+            ? currentIds.filter((id) => id !== userId)
+            : [...currentIds, userId],
+        };
+      })
     );
   };
 
@@ -114,13 +130,14 @@ export function TaskForm({
     if (!newSubTaskTitle.trim()) return;
     setSubTasks((prev) => [
       ...prev,
-      { id: generateId(), title: newSubTaskTitle.trim(), completed: false, manHours: undefined },
+      { id: generateId(), title: newSubTaskTitle.trim(), completed: false, manHours: undefined, assigneeIds: [] },
     ]);
     setNewSubTaskTitle("");
   };
 
   const handleRemoveSubTask = (id: string) => {
     setSubTasks((prev) => prev.filter((st) => st.id !== id));
+    if (expandedSubTask === id) setExpandedSubTask(null);
   };
 
   const handleUpdateSubTaskHours = (id: string, value: string) => {
@@ -189,6 +206,7 @@ export function TaskForm({
       setManHours("");
       setAttachments([]);
       setSubTasks([]);
+      setExpandedSubTask(null);
     }
     onClose();
   };
@@ -283,7 +301,7 @@ export function TaskForm({
 
           {/* Assignees (checkboxes) */}
           <div className="space-y-2">
-            <Label>ผู้รับผิดชอบ</Label>
+            <Label>ผู้รับผิดชอบ (task หลัก)</Label>
             {members.length === 0 ? (
               <p className="text-sm text-muted-foreground">ไม่มีสมาชิกในกลุ่ม</p>
             ) : (
@@ -321,29 +339,75 @@ export function TaskForm({
               <p className="text-sm text-muted-foreground">ยังไม่มี sub-task</p>
             )}
             {subTasks.map((st) => (
-              <div
-                key={st.id}
-                className="flex items-center gap-2 bg-muted rounded-md px-3 py-1.5"
-              >
-                <span className="flex-1 text-sm truncate">{st.title}</span>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  value={st.manHours?.toString() ?? ""}
-                  onChange={(e) => handleUpdateSubTaskHours(st.id, e.target.value)}
-                  placeholder="ชม."
-                  className="w-20 h-7 text-xs px-2"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0"
-                  onClick={() => handleRemoveSubTask(st.id)}
-                >
-                  <Trash2 className="w-3 h-3 text-destructive" />
-                </Button>
+              <div key={st.id} className="border border-border rounded-md overflow-hidden">
+                {/* Sub-task header row */}
+                <div className="flex items-center gap-2 bg-muted px-3 py-1.5">
+                  <span className="flex-1 text-sm truncate">{st.title}</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={st.manHours?.toString() ?? ""}
+                    onChange={(e) => handleUpdateSubTaskHours(st.id, e.target.value)}
+                    placeholder="ชม."
+                    className="w-20 h-7 text-xs px-2"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedSubTask((prev) => (prev === st.id ? null : st.id))
+                    }
+                    className="text-muted-foreground hover:text-foreground"
+                    title="กำหนดผู้รับผิดชอบ sub-task"
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                  </button>
+                  {expandedSubTask === st.id ? (
+                    <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0"
+                    onClick={() => handleRemoveSubTask(st.id)}
+                  >
+                    <Trash2 className="w-3 h-3 text-destructive" />
+                  </Button>
+                </div>
+
+                {/* Sub-task assignees (expandable) */}
+                {expandedSubTask === st.id && (
+                  <div className="px-3 py-2 space-y-1 bg-background">
+                    <p className="text-xs text-muted-foreground mb-1">
+                      ผู้รับผิดชอบ sub-task:
+                    </p>
+                    {members.map((m) => {
+                      const checked = (st.assigneeIds ?? []).includes(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => toggleSubTaskAssignee(st.id, m.id)}
+                          className={`flex items-center gap-2 px-2 py-1 rounded text-xs w-full text-left transition-colors ${
+                            checked
+                              ? "bg-primary/10 border border-primary/30"
+                              : "hover:bg-muted border border-transparent"
+                          }`}
+                        >
+                          {checked ? (
+                            <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0" />
+                          ) : (
+                            <Square className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          )}
+                          <span>{m.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ))}
             <div className="flex gap-2">

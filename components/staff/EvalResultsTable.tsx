@@ -1,17 +1,48 @@
 "use client";
 
-import { Evaluation } from "@/types";
+import { Evaluation, EvaluationCriteria } from "@/types";
+import { useRubricStore } from "@/store";
 import { mockUsers } from "@/lib/mockData";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Star } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const CRITERIA_LABELS: { key: keyof EvaluationCriteria; label: string }[] = [
+  { key: "contribution", label: "Contribution" },
+  { key: "qualityOfWork", label: "Quality of Work" },
+  { key: "responsibility", label: "Responsibility" },
+  { key: "communication", label: "Communication" },
+  { key: "teamwork", label: "Teamwork" },
+  { key: "effort", label: "Effort" },
+];
 
 interface EvalResultsTableProps {
   evaluations: Evaluation[];
   groupId: string;
 }
 
-export function EvalResultsTable({ evaluations, groupId }: EvalResultsTableProps) {
+function StarRow({ score }: { score: number }) {
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((s) => (
+        <Star
+          key={s}
+          className={cn(
+            "w-3 h-3",
+            s <= Math.round(score)
+              ? "fill-yellow-400 text-yellow-400"
+              : "text-muted-foreground"
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
+export function EvalResultsTable({ evaluations }: EvalResultsTableProps) {
+  const { weights } = useRubricStore();
+
   if (evaluations.length === 0) {
     return (
       <Card>
@@ -27,37 +58,65 @@ export function EvalResultsTable({ evaluations, groupId }: EvalResultsTableProps
 
   return (
     <div className="space-y-4">
-      {/* Summary */}
+      {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {evaluateeIds.map((evaluateeId) => {
           const evals = evaluations.filter((e) => e.evaluateeId === evaluateeId);
           const avg = evals.reduce((s, e) => s + e.score, 0) / evals.length;
           const user = mockUsers.find((u) => u.id === evaluateeId);
 
+          // Per-criteria averages
+          const criteriaAvgs = CRITERIA_LABELS.map(({ key, label }) => {
+            const evalsWithCriteria = evals.filter((e) => e.criteriaScores);
+            const avg =
+              evalsWithCriteria.length > 0
+                ? evalsWithCriteria.reduce(
+                    (s, e) => s + (e.criteriaScores![key] ?? 0),
+                    0
+                  ) / evalsWithCriteria.length
+                : null;
+            return { key, label, avg };
+          });
+
           return (
             <Card key={evaluateeId}>
-              <CardContent className="p-4">
-                <p className="font-medium text-sm">{user?.name ?? evaluateeId}</p>
-                <div className="flex items-center gap-1 mt-1">
-                  <div className="flex gap-0.5">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Star
-                        key={s}
-                        className={`w-3.5 h-3.5 ${
-                          s <= Math.round(avg)
-                            ? "fill-yellow-400 text-yellow-400"
-                            : "text-muted-foreground"
-                        }`}
-                      />
+              <CardContent className="p-4 space-y-3">
+                <div>
+                  <p className="font-medium text-sm">{user?.name ?? evaluateeId}</p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <StarRow score={avg} />
+                    <span className="text-sm font-semibold ml-1">
+                      {avg.toFixed(2)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      ({evals.length} การประเมิน)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Criteria breakdown */}
+                {criteriaAvgs.some((c) => c.avg !== null) && (
+                  <div className="space-y-1 pt-2 border-t border-border">
+                    {criteriaAvgs.map(({ key, label, avg }) => (
+                      <div key={key} className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          {label}
+                          <span className="ml-1 text-muted-foreground/60">({weights[key]}%)</span>
+                        </span>
+                        {avg !== null ? (
+                          <div className="flex items-center gap-1">
+                            <StarRow score={avg} />
+                            <span className="font-medium w-6 text-right">
+                              {avg.toFixed(1)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </div>
                     ))}
                   </div>
-                  <span className="text-sm font-semibold ml-1">
-                    {avg.toFixed(1)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    ({evals.length} การประเมิน)
-                  </span>
-                </div>
+                )}
               </CardContent>
             </Card>
           );
@@ -72,7 +131,7 @@ export function EvalResultsTable({ evaluations, groupId }: EvalResultsTableProps
 
           return (
             <Card key={e.id} className="text-sm">
-              <CardContent className="p-3">
+              <CardContent className="p-3 space-y-2">
                 <div className="flex flex-wrap items-start gap-2 justify-between">
                   <div>
                     <span className="text-muted-foreground">
@@ -84,23 +143,27 @@ export function EvalResultsTable({ evaluations, groupId }: EvalResultsTableProps
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Star
-                        key={s}
-                        className={`w-3 h-3 ${
-                          s <= e.score
-                            ? "fill-yellow-400 text-yellow-400"
-                            : "text-muted-foreground"
-                        }`}
-                      />
-                    ))}
+                    <StarRow score={e.score} />
                     <Badge variant="secondary" className="ml-1 text-xs">
                       {e.score}/5
                     </Badge>
                   </div>
                 </div>
-                <p className="text-muted-foreground mt-1">{e.comment}</p>
-                <p className="text-xs text-muted-foreground mt-1">
+
+                {/* Criteria row */}
+                {e.criteriaScores && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs bg-muted/40 rounded px-2 py-1.5">
+                    {CRITERIA_LABELS.map(({ key, label }) => (
+                      <div key={key} className="flex items-center justify-between gap-1">
+                        <span className="text-muted-foreground truncate">{label}</span>
+                        <span className="font-medium shrink-0">{e.criteriaScores![key]}/5</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-muted-foreground">{e.comment}</p>
+                <p className="text-xs text-muted-foreground">
                   {new Date(e.submittedAt).toLocaleString("th-TH")}
                 </p>
               </CardContent>

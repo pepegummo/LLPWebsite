@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Evaluation } from "@/types";
-import { useEvaluationStore, useAuthStore } from "@/store";
+import { Evaluation, EvaluationCriteria } from "@/types";
+import { useEvaluationStore, useAuthStore, useRubricStore } from "@/store";
 import { User } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,15 +17,78 @@ function generateId() {
   return Math.random().toString(36).substring(2, 11);
 }
 
+const CRITERIA_LABELS: { key: keyof EvaluationCriteria; label: string }[] = [
+  { key: "contribution", label: "Contribution (การมีส่วนร่วม)" },
+  { key: "qualityOfWork", label: "Quality of Work (คุณภาพงาน)" },
+  { key: "responsibility", label: "Responsibility (ความรับผิดชอบ)" },
+  { key: "communication", label: "Communication (การสื่อสาร)" },
+  { key: "teamwork", label: "Teamwork (การทำงานเป็นทีม)" },
+  { key: "effort", label: "Effort (ความพยายาม)" },
+];
+
+function computeWeightedScore(
+  criteria: EvaluationCriteria,
+  weights: Record<keyof EvaluationCriteria, number>
+): 1 | 2 | 3 | 4 | 5 {
+  const totalWeight = Object.values(weights).reduce((s, w) => s + w, 0) || 100;
+  const weighted = CRITERIA_LABELS.reduce((s, { key }) => {
+    return s + (criteria[key] * weights[key]) / totalWeight;
+  }, 0);
+  return Math.min(5, Math.max(1, Math.round(weighted))) as 1 | 2 | 3 | 4 | 5;
+}
+
+function CriteriaStars({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  const [hovered, setHovered] = useState(0);
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((s) => (
+        <button
+          key={s}
+          type="button"
+          onMouseEnter={() => setHovered(s)}
+          onMouseLeave={() => setHovered(0)}
+          onClick={() => onChange(s)}
+          className="focus:outline-none"
+        >
+          <Star
+            className={cn(
+              "w-5 h-5 transition-colors",
+              s <= (hovered || value)
+                ? "fill-yellow-400 text-yellow-400"
+                : "text-muted-foreground"
+            )}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 interface EvaluationFormProps {
   evaluatee: User;
   groupId: string;
 }
 
+const EMPTY_CRITERIA: EvaluationCriteria = {
+  contribution: 0,
+  qualityOfWork: 0,
+  responsibility: 0,
+  communication: 0,
+  teamwork: 0,
+  effort: 0,
+};
+
 export function EvaluationForm({ evaluatee, groupId }: EvaluationFormProps) {
   const { currentUser } = useAuthStore();
   const { addEvaluation, updateEvaluation, hasEvaluated, evaluations } =
     useEvaluationStore();
+  const { weights } = useRubricStore();
 
   const alreadyEvaluated = currentUser
     ? hasEvaluated(currentUser.id, evaluatee.id)
@@ -39,14 +102,21 @@ export function EvaluationForm({ evaluatee, groupId }: EvaluationFormProps) {
     : null;
 
   const [isEditing, setIsEditing] = useState(false);
-  const [score, setScore] = useState<number>(existingEval?.score ?? 0);
+  const [criteria, setCriteria] = useState<EvaluationCriteria>(
+    existingEval?.criteriaScores ?? { ...EMPTY_CRITERIA }
+  );
   const [comment, setComment] = useState(existingEval?.comment ?? "");
-  const [hoveredStar, setHoveredStar] = useState(0);
+
+  const updateCriterion = (key: keyof EvaluationCriteria, value: number) => {
+    setCriteria((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const allRated = CRITERIA_LABELS.every(({ key }) => criteria[key] > 0);
 
   const handleSubmit = () => {
     if (!currentUser) return;
-    if (score === 0) {
-      toast.error("กรุณาให้คะแนน");
+    if (!allRated) {
+      toast.error("กรุณาให้คะแนนทุกหัวข้อ");
       return;
     }
     if (!comment.trim()) {
@@ -54,10 +124,13 @@ export function EvaluationForm({ evaluatee, groupId }: EvaluationFormProps) {
       return;
     }
 
+    const score = computeWeightedScore(criteria, weights);
+
     if (isEditing && existingEval) {
       updateEvaluation({
         ...existingEval,
-        score: score as 1 | 2 | 3 | 4 | 5,
+        score,
+        criteriaScores: criteria,
         comment: comment.trim(),
         submittedAt: new Date().toISOString(),
       });
@@ -69,7 +142,8 @@ export function EvaluationForm({ evaluatee, groupId }: EvaluationFormProps) {
         groupId,
         evaluatorId: currentUser.id,
         evaluateeId: evaluatee.id,
-        score: score as 1 | 2 | 3 | 4 | 5,
+        score,
+        criteriaScores: criteria,
         comment: comment.trim(),
         submittedAt: new Date().toISOString(),
       };
@@ -94,18 +168,44 @@ export function EvaluationForm({ evaluatee, groupId }: EvaluationFormProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <div className="flex gap-0.5">
-            {[1, 2, 3, 4, 5].map((s) => (
-              <Star
-                key={s}
-                className={cn(
-                  "w-4 h-4",
-                  s <= existingEval.score
-                    ? "fill-yellow-400 text-yellow-400"
-                    : "text-muted-foreground"
-                )}
-              />
-            ))}
+          {existingEval.criteriaScores && (
+            <div className="space-y-1">
+              {CRITERIA_LABELS.map(({ key, label }) => (
+                <div key={key} className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground truncate mr-2">{label}</span>
+                  <div className="flex gap-0.5 shrink-0">
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <Star
+                        key={s}
+                        className={cn(
+                          "w-3 h-3",
+                          s <= existingEval.criteriaScores![key]
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "text-muted-foreground"
+                        )}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 pt-1 border-t border-green-200">
+            <span className="text-xs text-muted-foreground">คะแนนรวม:</span>
+            <div className="flex gap-0.5">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <Star
+                  key={s}
+                  className={cn(
+                    "w-3.5 h-3.5",
+                    s <= existingEval.score
+                      ? "fill-yellow-400 text-yellow-400"
+                      : "text-muted-foreground"
+                  )}
+                />
+              ))}
+            </div>
+            <span className="text-xs font-semibold">{existingEval.score}/5</span>
           </div>
           <p className="text-sm text-muted-foreground">{existingEval.comment}</p>
           <Button
@@ -113,7 +213,7 @@ export function EvaluationForm({ evaluatee, groupId }: EvaluationFormProps) {
             variant="outline"
             className="mt-1"
             onClick={() => {
-              setScore(existingEval.score);
+              setCriteria(existingEval.criteriaScores ?? { ...EMPTY_CRITERIA });
               setComment(existingEval.comment);
               setIsEditing(true);
             }}
@@ -125,6 +225,8 @@ export function EvaluationForm({ evaluatee, groupId }: EvaluationFormProps) {
       </Card>
     );
   }
+
+  const previewScore = allRated ? computeWeightedScore(criteria, weights) : null;
 
   return (
     <Card className={isEditing ? "border-primary/40" : ""}>
@@ -139,30 +241,46 @@ export function EvaluationForm({ evaluatee, groupId }: EvaluationFormProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="space-y-1">
-          <Label className="text-xs">คะแนน</Label>
-          <div className="flex gap-1">
-            {[1, 2, 3, 4, 5].map((s) => (
-              <button
-                key={s}
-                type="button"
-                onMouseEnter={() => setHoveredStar(s)}
-                onMouseLeave={() => setHoveredStar(0)}
-                onClick={() => setScore(s)}
-                className="focus:outline-none"
-              >
+        {/* Criteria */}
+        <div className="space-y-2">
+          {CRITERIA_LABELS.map(({ key, label }) => (
+            <div key={key} className="space-y-0.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">{label}</Label>
+                <span className="text-xs text-muted-foreground">
+                  {weights[key]}%
+                </span>
+              </div>
+              <CriteriaStars
+                value={criteria[key]}
+                onChange={(v) => updateCriterion(key, v)}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Preview score */}
+        {previewScore !== null && (
+          <div className="flex items-center gap-2 py-1.5 px-2 bg-muted rounded-md">
+            <span className="text-xs text-muted-foreground">คะแนนรวม (weighted):</span>
+            <div className="flex gap-0.5">
+              {[1, 2, 3, 4, 5].map((s) => (
                 <Star
+                  key={s}
                   className={cn(
-                    "w-6 h-6 transition-colors",
-                    s <= (hoveredStar || score)
+                    "w-3.5 h-3.5",
+                    s <= previewScore
                       ? "fill-yellow-400 text-yellow-400"
                       : "text-muted-foreground"
                   )}
                 />
-              </button>
-            ))}
+              ))}
+            </div>
+            <span className="text-xs font-semibold">{previewScore}/5</span>
           </div>
-        </div>
+        )}
+
+        {/* Comment */}
         <div className="space-y-1">
           <Label className="text-xs">ความคิดเห็น</Label>
           <Textarea
@@ -173,6 +291,7 @@ export function EvaluationForm({ evaluatee, groupId }: EvaluationFormProps) {
             className="text-sm"
           />
         </div>
+
         <div className="flex gap-2">
           {isEditing && (
             <Button

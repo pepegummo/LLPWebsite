@@ -1,19 +1,13 @@
 "use client";
 
-import { useGroupStore } from "@/store";
-import { GroupTable } from "@/components/staff/GroupTable";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
+// This page has been merged into /staff/setup
 export default function StaffGroupsPage() {
-  const { groups } = useGroupStore();
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">จัดการกลุ่ม</h1>
-        <p className="text-muted-foreground">ดูและจัดการสมาชิกในกลุ่มทั้งหมด</p>
-      </div>
-
-      <GroupTable groups={groups} />
-    </div>
-  );
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/staff/setup");
+  }, [router]);
+  return null;
 }
