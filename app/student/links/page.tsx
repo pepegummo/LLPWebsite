@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useAuthStore, useTaskStore, useGroupStore, useLinkStore } from "@/store";
+import { useAuthStore, useTaskStore, useGroupStore, useLinkStore, useTagStore } from "@/store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, PlusCircle, Trash2, Link2, KanbanSquare } from "lucide-react";
+import { ExternalLink, PlusCircle, Trash2, Link2, KanbanSquare, Tag, X } from "lucide-react";
 import { toast } from "sonner";
 
 function generateId() {
@@ -25,14 +25,20 @@ export default function StudentLinksPage() {
   const { tasks } = useTaskStore();
   const { groups } = useGroupStore();
   const { links, addLink, removeLink } = useLinkStore();
+  const { tags, addTag, removeTag, getTagsByGroup, getNextColor } = useTagStore();
 
   const [newLabel, setNewLabel] = useState("");
   const [newUrl, setNewUrl] = useState("");
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [newTagName, setNewTagName] = useState("");
+  const [filterTagId, setFilterTagId] = useState<string | null>(null);
+  const [showTagManager, setShowTagManager] = useState(false);
 
   if (!currentUser) return null;
 
   const activeGroupId = currentUser.activeGroupId;
   const activeGroup = groups.find((g) => g.id === activeGroupId);
+  const groupTags = activeGroupId ? getTagsByGroup(activeGroupId) : [];
 
   // Links from tasks
   const groupTasks = tasks.filter((t) => t.groupId === activeGroupId);
@@ -43,6 +49,7 @@ export default function StudentLinksPage() {
       url: att.url,
       taskTitle: task.title,
       isFromTask: true,
+      tags: task.tags ?? [],
     }))
   );
 
@@ -57,9 +64,20 @@ export default function StudentLinksPage() {
       isFromTask: false,
       createdBy: l.createdBy,
       createdAt: l.createdAt,
+      tags: l.tags ?? [],
     }));
 
   const allLinks = [...taskLinks, ...standaloneLinks];
+
+  const filteredLinks = filterTagId
+    ? allLinks.filter((l) => l.tags.includes(filterTagId))
+    : allLinks;
+
+  const toggleLinkTag = (tagId: string) => {
+    setSelectedTagIds((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+    );
+  };
 
   const handleAddLink = () => {
     if (!newLabel.trim() || !newUrl.trim()) {
@@ -77,21 +95,54 @@ export default function StudentLinksPage() {
       url: normalizeUrl(newUrl.trim()),
       createdAt: new Date().toISOString(),
       createdBy: currentUser.id,
+      tags: selectedTagIds,
     });
     setNewLabel("");
     setNewUrl("");
+    setSelectedTagIds([]);
     toast.success("เพิ่มลิงก์แล้ว");
+  };
+
+  const handleAddTag = () => {
+    if (!newTagName.trim() || !activeGroupId) return;
+    const exists = groupTags.some(
+      (t) => t.name.toLowerCase() === newTagName.trim().toLowerCase()
+    );
+    if (exists) {
+      toast.error("มี tag นี้แล้ว");
+      return;
+    }
+    addTag({
+      id: generateId(),
+      groupId: activeGroupId,
+      name: newTagName.trim(),
+      color: getNextColor(activeGroupId),
+    });
+    setNewTagName("");
+    toast.success("เพิ่ม tag แล้ว");
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Link2 className="w-6 h-6" />
-          ลิงก์
-        </h1>
-        {activeGroup && (
-          <p className="text-muted-foreground">กลุ่ม: {activeGroup.name}</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Link2 className="w-6 h-6" />
+            ลิงก์
+          </h1>
+          {activeGroup && (
+            <p className="text-muted-foreground">กลุ่ม: {activeGroup.name}</p>
+          )}
+        </div>
+        {activeGroupId && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowTagManager((v) => !v)}
+          >
+            <Tag className="w-3.5 h-3.5 mr-1.5" />
+            จัดการ Tag
+          </Button>
         )}
       </div>
 
@@ -103,12 +154,66 @@ export default function StudentLinksPage() {
         </Card>
       ) : (
         <>
+          {/* Tag Manager */}
+          {showTagManager && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Tag className="w-4 h-4" />
+                  จัดการ Tag
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="ชื่อ tag ใหม่..."
+                    value={newTagName}
+                    onChange={(e) => setNewTagName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddTag();
+                      }
+                    }}
+                    className="max-w-xs"
+                  />
+                  <Button size="sm" onClick={handleAddTag}>
+                    <PlusCircle className="w-4 h-4 mr-1.5" />
+                    เพิ่ม
+                  </Button>
+                </div>
+                {groupTags.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {groupTags.map((tag) => (
+                      <div
+                        key={tag.id}
+                        className="flex items-center gap-1 rounded-full px-3 py-1 text-xs text-white"
+                        style={{ backgroundColor: tag.color }}
+                      >
+                        {tag.name}
+                        <button
+                          onClick={() => {
+                            removeTag(tag.id);
+                            toast.success("ลบ tag แล้ว");
+                          }}
+                          className="ml-1 hover:opacity-70"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Add new link */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">เพิ่มลิงก์ใหม่</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <div className="flex gap-2">
                 <div className="flex-1 space-y-1">
                   <Label htmlFor="link-label" className="text-xs">
@@ -145,18 +250,68 @@ export default function StudentLinksPage() {
                   </Button>
                 </div>
               </div>
+              {/* Tag picker for new link */}
+              {groupTags.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">เลือก Tag:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {groupTags.map((tag) => (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => toggleLinkTag(tag.id)}
+                        className="flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs transition-opacity"
+                        style={{
+                          backgroundColor: tag.color,
+                          color: "white",
+                          opacity: selectedTagIds.includes(tag.id) ? 1 : 0.4,
+                        }}
+                      >
+                        {tag.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
+          {/* Filter by tag */}
+          {groupTags.length > 0 && (
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-sm text-muted-foreground">Filter:</span>
+              <Button
+                variant={filterTagId === null ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilterTagId(null)}
+              >
+                ทั้งหมด
+              </Button>
+              {groupTags.map((tag) => (
+                <button
+                  key={tag.id}
+                  onClick={() =>
+                    setFilterTagId(filterTagId === tag.id ? null : tag.id)
+                  }
+                  className="rounded-full px-3 py-1 text-xs text-white transition-opacity"
+                  style={{
+                    backgroundColor: tag.color,
+                    opacity: filterTagId === tag.id || filterTagId === null ? 1 : 0.5,
+                  }}
+                >
+                  {tag.name}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Links list */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">
-                ลิงก์ทั้งหมด ({allLinks.length})
-              </h2>
-            </div>
+            <h2 className="text-lg font-semibold">
+              ลิงก์ทั้งหมด ({filteredLinks.length})
+            </h2>
 
-            {allLinks.length === 0 ? (
+            {filteredLinks.length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center text-muted-foreground">
                   <Link2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -168,51 +323,69 @@ export default function StudentLinksPage() {
               </Card>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {allLinks.map((link) => (
-                  <Card key={link.id} className="group">
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                          <ExternalLink className="w-4 h-4 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <a
-                            href={normalizeUrl(link.url)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-medium text-sm hover:underline text-primary line-clamp-1"
-                          >
-                            {link.label}
-                          </a>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
-                            {normalizeUrl(link.url)}
-                          </p>
-                          {link.isFromTask && link.taskTitle && (
-                            <div className="flex items-center gap-1 mt-1.5">
-                              <KanbanSquare className="w-3 h-3 text-muted-foreground" />
-                              <Badge variant="outline" className="text-xs h-5">
-                                {link.taskTitle}
-                              </Badge>
-                            </div>
+                {filteredLinks.map((link) => {
+                  const linkTags = groupTags.filter((t) =>
+                    link.tags.includes(t.id)
+                  );
+                  return (
+                    <Card key={link.id} className="group">
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                            <ExternalLink className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <a
+                              href={normalizeUrl(link.url)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-sm hover:underline text-primary line-clamp-1"
+                            >
+                              {link.label}
+                            </a>
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">
+                              {normalizeUrl(link.url)}
+                            </p>
+                            {link.isFromTask && link.taskTitle && (
+                              <div className="flex items-center gap-1 mt-1.5">
+                                <KanbanSquare className="w-3 h-3 text-muted-foreground" />
+                                <Badge variant="outline" className="text-xs h-5">
+                                  {link.taskTitle}
+                                </Badge>
+                              </div>
+                            )}
+                            {linkTags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {linkTags.map((tag) => (
+                                  <span
+                                    key={tag.id}
+                                    className="rounded-full px-2 py-0.5 text-[10px] text-white"
+                                    style={{ backgroundColor: tag.color }}
+                                  >
+                                    {tag.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {!link.isFromTask && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => {
+                                removeLink(link.id);
+                                toast.success("ลบลิงก์แล้ว");
+                              }}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                            </Button>
                           )}
                         </div>
-                        {!link.isFromTask && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => {
-                              removeLink(link.id);
-                              toast.success("ลบลิงก์แล้ว");
-                            }}
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </div>

@@ -50,6 +50,7 @@ export interface Task {
   createdAt: string;
   manHours: number | null;
   subTasks: SubTask[];
+  tags?: string[];
 }
 
 export interface ActivityLog {
@@ -69,6 +70,38 @@ export interface StandaloneLink {
   url: string;
   createdAt: string;
   createdBy: string;
+  tags?: string[];
+}
+
+export interface Tag {
+  id: string;
+  groupId: string;
+  name: string;
+  color: string;
+}
+
+export interface TicketMessage {
+  id: string;
+  ticketId: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+}
+
+export type TicketType = "question" | "request" | "feedback" | "issue";
+export type TicketStatus = "open" | "in_progress" | "resolved";
+
+export interface Ticket {
+  id: string;
+  groupId: string;
+  studentId: string;
+  title: string;
+  description: string;
+  type: TicketType;
+  status: TicketStatus;
+  createdAt: string;
+  updatedAt: string;
+  messages: TicketMessage[];
 }
 
 export interface EvaluationCriteria {

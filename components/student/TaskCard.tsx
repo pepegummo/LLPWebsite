@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Task, TaskStatus } from "@/types";
-import { useTaskStore, useAuthStore, useActivityStore } from "@/store";
+import { useTaskStore, useAuthStore, useActivityStore, useTagStore } from "@/store";
 import { mockUsers } from "@/lib/mockData";
 import { TaskForm } from "./TaskForm";
 import { Card, CardContent } from "@/components/ui/card";
@@ -69,6 +69,10 @@ export function TaskCard({ task }: TaskCardProps) {
   const { updateTask, deleteTask, moveTask, toggleSubTask } = useTaskStore();
   const { currentUser } = useAuthStore();
   const { addLog, getLogsByTask } = useActivityStore();
+  const { getTagsByGroup } = useTagStore();
+  const taskTags = getTagsByGroup(task.groupId).filter((t) =>
+    (task.tags ?? []).includes(t.id)
+  );
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -195,6 +199,20 @@ export function TaskCard({ task }: TaskCardProps) {
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                   {task.description}
                 </p>
+              )}
+
+              {taskTags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {taskTags.map((tag) => (
+                    <span
+                      key={tag.id}
+                      className="rounded-full px-2 py-0.5 text-[10px] text-white leading-none"
+                      style={{ backgroundColor: tag.color }}
+                    >
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
               )}
 
               <div className="flex flex-wrap gap-1.5 mt-2">

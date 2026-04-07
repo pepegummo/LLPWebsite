@@ -8,3 +8,5 @@ export { useLinkStore } from "./linkStore";
 export { useChatStore } from "./chatStore";
 export { useMeetingStore } from "./meetingStore";
 export { useRubricStore, DEFAULT_RUBRIC_WEIGHTS } from "./rubricStore";
+export { useTagStore } from "./tagStore";
+export { useTicketStore } from "./ticketStore";

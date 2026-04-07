@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Task, TaskStatus, Attachment, SubTask } from "@/types";
-import { useGroupStore, useAuthStore, useNotificationStore } from "@/store";
+import { useGroupStore, useAuthStore, useNotificationStore, useTagStore } from "@/store";
 import { mockUsers } from "@/lib/mockData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { PlusCircle, Trash2, Link, CheckSquare, Square, Clock, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { PlusCircle, Trash2, Link, CheckSquare, Square, Clock, ChevronDown, ChevronUp, Users, Tag } from "lucide-react";
 
 function generateId() {
   return Math.random().toString(36).substring(2, 11);
@@ -53,8 +53,10 @@ export function TaskForm({
   const { groups } = useGroupStore();
   const { currentUser } = useAuthStore();
   const { addNotification } = useNotificationStore();
+  const { getTagsByGroup } = useTagStore();
 
   const group = groups.find((g) => g.id === groupId);
+  const groupTags = getTagsByGroup(groupId);
   const members = group
     ? mockUsers.filter((u) => group.memberIds.includes(u.id))
     : [];
@@ -83,6 +85,15 @@ export function TaskForm({
   );
   const [newSubTaskTitle, setNewSubTaskTitle] = useState("");
   const [expandedSubTask, setExpandedSubTask] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>(
+    initialTask?.tags ?? []
+  );
+
+  const toggleTag = (tagId: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+    );
+  };
 
   const toggleAssignee = (userId: string) => {
     setAssigneeIds((prev) =>
@@ -177,6 +188,7 @@ export function TaskForm({
           ? subtaskHoursSum > 0 ? subtaskHoursSum : null
           : manHours ? parseFloat(manHours) : null,
       subTasks,
+      tags: selectedTags,
     };
 
     // Send notification to each newly assigned member
@@ -207,6 +219,7 @@ export function TaskForm({
       setAttachments([]);
       setSubTasks([]);
       setExpandedSubTask(null);
+      setSelectedTags([]);
     }
     onClose();
   };
@@ -298,6 +311,32 @@ export function TaskForm({
               onChange={(e) => setDueDate(e.target.value)}
             />
           </div>
+
+          {/* Tags */}
+          {groupTags.length > 0 && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5" />
+                Tag
+              </Label>
+              <div className="flex flex-wrap gap-1.5">
+                {groupTags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => toggleTag(tag.id)}
+                    className="rounded-full px-3 py-0.5 text-xs text-white transition-opacity"
+                    style={{
+                      backgroundColor: tag.color,
+                      opacity: selectedTags.includes(tag.id) ? 1 : 0.35,
+                    }}
+                  >
+                    {tag.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Assignees (checkboxes) */}
           <div className="space-y-2">

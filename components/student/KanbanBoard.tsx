@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Task, TaskStatus } from "@/types";
-import { useTaskStore, useAuthStore, useActivityStore } from "@/store";
+import { useTaskStore, useAuthStore, useActivityStore, useTagStore } from "@/store";
 import { KanbanColumn } from "./KanbanColumn";
 import { TaskForm } from "./TaskForm";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import {
   closestCorners,
 } from "@dnd-kit/core";
 import { toast } from "sonner";
-import { PlusCircle, User } from "lucide-react";
+import { PlusCircle, User, Tag } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -42,14 +42,20 @@ export function KanbanBoard({ groupId }: KanbanBoardProps) {
   const { tasks, addTask, moveTask, updateTask } = useTaskStore();
   const { currentUser } = useAuthStore();
   const { addLog } = useActivityStore();
+  const { getTagsByGroup } = useTagStore();
   const [addOpen, setAddOpen] = useState(false);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [filterMine, setFilterMine] = useState(false);
+  const [filterTagId, setFilterTagId] = useState<string | null>(null);
 
+  const groupTags = getTagsByGroup(groupId);
   const groupTasks = tasks.filter((t) => t.groupId === groupId);
-  const displayTasks = filterMine && currentUser
+  const filteredByOwner = filterMine && currentUser
     ? groupTasks.filter((t) => t.assigneeIds.includes(currentUser.id))
     : groupTasks;
+  const displayTasks = filterTagId
+    ? filteredByOwner.filter((t) => (t.tags ?? []).includes(filterTagId))
+    : filteredByOwner;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -134,9 +140,9 @@ export function KanbanBoard({ groupId }: KanbanBoardProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Kanban Board</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant={filterMine ? "default" : "outline"}
             size="sm"
@@ -145,6 +151,22 @@ export function KanbanBoard({ groupId }: KanbanBoardProps) {
             <User className="w-4 h-4 mr-1.5" />
             {filterMine ? "งานของฉัน" : "ทุกงาน"}
           </Button>
+          {groupTags.map((tag) => (
+            <button
+              key={tag.id}
+              onClick={() =>
+                setFilterTagId(filterTagId === tag.id ? null : tag.id)
+              }
+              className="flex items-center gap-1 rounded-full px-3 py-1 text-xs text-white transition-opacity"
+              style={{
+                backgroundColor: tag.color,
+                opacity: filterTagId === tag.id || filterTagId === null ? 1 : 0.45,
+              }}
+            >
+              <Tag className="w-2.5 h-2.5" />
+              {tag.name}
+            </button>
+          ))}
           <Button onClick={() => setAddOpen(true)} size="sm">
             <PlusCircle className="w-4 h-4 mr-2" />
             เพิ่มงาน
