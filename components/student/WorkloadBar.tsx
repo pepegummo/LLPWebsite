@@ -2,13 +2,16 @@
 
 import { Task } from "@/types";
 import { mockUsers } from "@/lib/mockData";
+import { useDisplayName } from "@/lib/useDisplayName";
 
 interface WorkloadBarProps {
   tasks: Task[];
   memberIds: string[];
+  teamId?: string;
 }
 
-export function WorkloadBar({ tasks, memberIds }: WorkloadBarProps) {
+export function WorkloadBar({ tasks, memberIds, teamId }: WorkloadBarProps) {
+  const resolveDisplayName = useDisplayName();
   const members = mockUsers.filter((u) => memberIds.includes(u.id));
 
   if (members.length === 0) return null;
@@ -34,7 +37,7 @@ export function WorkloadBar({ tasks, memberIds }: WorkloadBarProps) {
         return (
           <div key={member.id} className="space-y-1">
             <div className="flex items-center justify-between text-sm">
-              <span>{member.name}</span>
+              <span>{resolveDisplayName(member.id, member.name, teamId)}</span>
               <span className="text-muted-foreground text-xs">
                 {doneTasks.length}/{memberTasks.length} งาน ({pct}%)
                 {totalHours > 0 && (

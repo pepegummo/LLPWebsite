@@ -8,7 +8,7 @@ interface LinkState {
   links: StandaloneLink[];
   addLink: (link: StandaloneLink) => void;
   removeLink: (linkId: string) => void;
-  getLinksByGroup: (groupId: string) => StandaloneLink[];
+  getLinksByTeam: (teamId: string) => StandaloneLink[];
 }
 
 export const useLinkStore = create<LinkState>()(
@@ -21,11 +21,11 @@ export const useLinkStore = create<LinkState>()(
         set((state) => ({
           links: state.links.filter((l) => l.id !== linkId),
         })),
-      getLinksByGroup: (groupId) =>
-        get().links.filter((l) => l.groupId === groupId),
+      getLinksByTeam: (teamId) =>
+        get().links.filter((l) => l.teamId === teamId),
     }),
     {
-      name: "link-storage",
+      name: "link-storage-v2",
     }
   )
 );

@@ -1,45 +1,90 @@
 "use client";
 
 import Link from "next/link";
-import { useAuthStore, useTaskStore, useGroupStore } from "@/store";
-import { InvitationCard } from "@/components/student/InvitationCard";
+import { useAuthStore, useTaskStore, useTeamStore, useNotificationStore } from "@/store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Clock, AlertCircle, ListTodo, ChevronRight } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, ListTodo, ChevronRight, Bell } from "lucide-react";
+import { toast } from "sonner";
+
+function generateId() {
+  return Math.random().toString(36).substring(2, 11);
+}
 
 export default function StudentDashboardPage() {
-  const { currentUser } = useAuthStore();
+  const { currentUser, updateCurrentUser } = useAuthStore();
   const { tasks } = useTaskStore();
-  const { groups } = useGroupStore();
+  const { getTeamsByUser, getUserRole, acceptInvitation, rejectInvitation, teams } = useTeamStore();
+  const { notifications, markAsRead, addNotification } = useNotificationStore();
 
   if (!currentUser) return null;
 
   // Pending invitations
-  const pendingInvitations = groups.filter((g) =>
-    g.invitedIds.includes(currentUser.id)
+  const pendingInvitations = teams.filter((t) =>
+    t.invitedIds.includes(currentUser.id)
   );
 
-  // User's groups
-  const userGroups = groups.filter((g) =>
-    g.memberIds.includes(currentUser.id)
-  );
+  // User's teams
+  const userTeams = getTeamsByUser(currentUser.id);
 
-  // Overall stats across all groups
+  // Overall stats across all teams
   const allMyTasks = tasks.filter((t) =>
-    userGroups.some((g) => g.id === t.groupId)
+    userTeams.some((tm) => tm.id === t.teamId) && t.assigneeIds.includes(currentUser.id)
   );
   const totalTasks = allMyTasks.length;
   const doneTasks = allMyTasks.filter((t) => t.status === "done").length;
-  const inProgressTasks = allMyTasks.filter(
-    (t) => t.status === "in_progress"
-  ).length;
+  const inProgressTasks = allMyTasks.filter((t) => t.status === "in_progress").length;
   const overdueTasks = allMyTasks.filter(
-    (t) =>
-      t.dueDate &&
-      t.status !== "done" &&
-      new Date(t.dueDate) < new Date()
+    (t) => t.dueDate && t.status !== "done" && new Date(t.dueDate) < new Date()
   ).length;
+
+  const handleAccept = (teamId: string) => {
+    const team = teams.find((t) => t.id === teamId);
+    if (!team) return;
+
+    acceptInvitation(teamId, currentUser.id);
+    updateCurrentUser({
+      ...currentUser,
+      activeTeamId: currentUser.activeTeamId ?? teamId,
+    });
+
+    // Mark invitation notification as read
+    const inviteNotif = notifications.find(
+      (n) => n.userId === currentUser.id && n.type === "invitation" && n.meta?.teamId === teamId
+    );
+    if (inviteNotif) markAsRead(inviteNotif.id);
+
+    // Notify the team leader
+    const leader = team.members.find((m) => m.role === "team_leader");
+    if (leader) {
+      addNotification({
+        id: generateId(),
+        userId: leader.userId,
+        type: "invite_response",
+        message: `${currentUser.name} ได้ยอมรับคำเชิญเข้าทีม ${team.name}`,
+        read: false,
+        createdAt: new Date().toISOString(),
+        meta: { teamId, userId: currentUser.id },
+      });
+    }
+
+    toast.success(`ยอมรับคำเชิญเข้าทีม ${team.name} แล้ว`);
+  };
+
+  const handleReject = (teamId: string) => {
+    const team = teams.find((t) => t.id === teamId);
+    if (!team) return;
+
+    rejectInvitation(teamId, currentUser.id);
+
+    const inviteNotif = notifications.find(
+      (n) => n.userId === currentUser.id && n.type === "invitation" && n.meta?.teamId === teamId
+    );
+    if (inviteNotif) markAsRead(inviteNotif.id);
+
+    toast.success(`ปฏิเสธคำเชิญเข้าทีม ${team.name} แล้ว`);
+  };
 
   return (
     <div className="space-y-6">
@@ -56,17 +101,37 @@ export default function StudentDashboardPage() {
             <Badge variant="destructive">{pendingInvitations.length}</Badge>
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {pendingInvitations.map((group) => (
-              <InvitationCard key={group.id} group={group} />
+            {pendingInvitations.map((team) => (
+              <Card key={team.id} className="border-primary/20 bg-primary/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Bell className="w-4 h-4 text-primary" />
+                    <div>
+                      <p className="font-medium text-sm">{team.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {team.members.length} สมาชิก
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" className="flex-1" onClick={() => handleAccept(team.id)}>
+                      ยอมรับ
+                    </Button>
+                    <Button size="sm" variant="outline" className="flex-1" onClick={() => handleReject(team.id)}>
+                      ปฏิเสธ
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
       )}
 
       {/* Overall stats */}
-      {userGroups.length > 0 && (
+      {userTeams.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold">ภาพรวมทั้งหมด</h2>
+          <h2 className="text-lg font-semibold">ภาพรวมงานของฉัน</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Card>
               <CardContent className="p-4 flex items-center gap-3">
@@ -108,19 +173,22 @@ export default function StudentDashboardPage() {
         </div>
       )}
 
-      {/* Groups with drilldown */}
+      {/* Teams with drilldown */}
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">กลุ่มของฉัน</h2>
-        {userGroups.length === 0 ? (
+        <h2 className="text-lg font-semibold">ทีมของฉัน</h2>
+        {userTeams.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground">
-              คุณยังไม่ได้เป็นสมาชิกกลุ่มใด
+              คุณยังไม่ได้เป็นสมาชิกทีมใด —{" "}
+              <Link href="/student/workspace" className="text-primary hover:underline">
+                สร้างทีมใหม่
+              </Link>
             </CardContent>
           </Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {userGroups.map((group) => {
-              const gt = tasks.filter((t) => t.groupId === group.id);
+            {userTeams.map((team) => {
+              const gt = tasks.filter((t) => t.teamId === team.id);
               const gDone = gt.filter((t) => t.status === "done").length;
               const gOverdue = gt.filter(
                 (t) =>
@@ -128,39 +196,31 @@ export default function StudentDashboardPage() {
                   t.status !== "done" &&
                   new Date(t.dueDate) < new Date()
               ).length;
-              const pct =
-                gt.length === 0
-                  ? 0
-                  : Math.round((gDone / gt.length) * 100);
+              const pct = gt.length === 0 ? 0 : Math.round((gDone / gt.length) * 100);
+              const myRole = getUserRole(team.id, currentUser.id);
+              const roleLabel = myRole === "team_leader" ? "Team Leader" : myRole === "assistant_leader" ? "Asst. Leader" : "Member";
 
               return (
                 <Card
-                  key={group.id}
-                  className={
-                    group.id === currentUser.activeGroupId
-                      ? "border-primary"
-                      : ""
-                  }
+                  key={team.id}
+                  className={team.id === currentUser.activeTeamId ? "border-primary" : ""}
                 >
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
-                      {group.name}
-                      {group.id === currentUser.activeGroupId && (
-                        <Badge variant="default" className="text-xs">
-                          กำลังใช้งาน
-                        </Badge>
+                      {team.name}
+                      {team.id === currentUser.activeTeamId && (
+                        <Badge variant="default" className="text-xs">กำลังใช้งาน</Badge>
                       )}
                       {gOverdue > 0 && (
-                        <Badge variant="destructive" className="text-xs">
-                          เกินกำหนด {gOverdue}
-                        </Badge>
+                        <Badge variant="destructive" className="text-xs">เกินกำหนด {gOverdue}</Badge>
                       )}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-xs text-muted-foreground">
-                      {group.memberIds.length} สมาชิก
-                    </p>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="secondary" className="text-xs">{roleLabel}</Badge>
+                      <p className="text-xs text-muted-foreground">{team.members.length} สมาชิก</p>
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       งาน: {gDone}/{gt.length} ({pct}%)
                     </p>
@@ -170,7 +230,7 @@ export default function StudentDashboardPage() {
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <Link href={`/student/dashboard/${group.id}`}>
+                    <Link href={`/student/dashboard/${team.id}`}>
                       <Button
                         variant="ghost"
                         size="sm"

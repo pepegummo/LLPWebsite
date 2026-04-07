@@ -9,7 +9,7 @@ interface EvaluationState {
   evaluations: Evaluation[];
   addEvaluation: (evaluation: Evaluation) => void;
   updateEvaluation: (evaluation: Evaluation) => void;
-  getEvaluationsByGroup: (groupId: string) => Evaluation[];
+  getEvaluationsByTeam: (teamId: string) => Evaluation[];
   getEvaluationsByEvaluator: (evaluatorId: string) => Evaluation[];
   hasEvaluated: (evaluatorId: string, evaluateeId: string) => boolean;
 }
@@ -28,8 +28,8 @@ export const useEvaluationStore = create<EvaluationState>()(
             e.id === evaluation.id ? evaluation : e
           ),
         })),
-      getEvaluationsByGroup: (groupId) =>
-        get().evaluations.filter((e) => e.groupId === groupId),
+      getEvaluationsByTeam: (teamId) =>
+        get().evaluations.filter((e) => e.teamId === teamId),
       getEvaluationsByEvaluator: (evaluatorId) =>
         get().evaluations.filter((e) => e.evaluatorId === evaluatorId),
       hasEvaluated: (evaluatorId, evaluateeId) =>
@@ -38,7 +38,7 @@ export const useEvaluationStore = create<EvaluationState>()(
         ),
     }),
     {
-      name: "evaluation-storage",
+      name: "evaluation-storage-v2",
     }
   )
 );

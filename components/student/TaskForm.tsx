@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { Task, TaskStatus, Attachment, SubTask } from "@/types";
-import { useGroupStore, useAuthStore, useNotificationStore, useTagStore } from "@/store";
+import { useTeamStore, useAuthStore, useNotificationStore, useTagStore } from "@/store";
 import { mockUsers } from "@/lib/mockData";
+import { useDisplayName } from "@/lib/useDisplayName";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,7 +41,7 @@ interface TaskFormProps {
   onClose: () => void;
   onSave: (task: Task) => void;
   initialTask?: Task;
-  groupId: string;
+  teamId: string;
 }
 
 export function TaskForm({
@@ -48,18 +49,18 @@ export function TaskForm({
   onClose,
   onSave,
   initialTask,
-  groupId,
+  teamId,
 }: TaskFormProps) {
-  const { groups } = useGroupStore();
+  const { teams } = useTeamStore();
   const { currentUser } = useAuthStore();
   const { addNotification } = useNotificationStore();
-  const { getTagsByGroup } = useTagStore();
+  const { getTagsByTeam } = useTagStore();
 
-  const group = groups.find((g) => g.id === groupId);
-  const groupTags = getTagsByGroup(groupId);
-  const members = group
-    ? mockUsers.filter((u) => group.memberIds.includes(u.id))
-    : [];
+  const resolveDisplayName = useDisplayName();
+  const team = teams.find((t) => t.id === teamId);
+  const groupTags = getTagsByTeam(teamId);
+  const memberIds = team ? team.members.map((m) => m.userId) : [];
+  const members = mockUsers.filter((u) => memberIds.includes(u.id));
 
   const [title, setTitle] = useState(initialTask?.title ?? "");
   const [description, setDescription] = useState(
@@ -175,7 +176,7 @@ export function TaskForm({
     const subtaskHoursSum = subTasks.reduce((s, st) => s + (st.manHours ?? 0), 0);
     const task: Task = {
       id: initialTask?.id ?? generateId(),
-      groupId,
+      teamId,
       title: title.trim(),
       description: description.trim() || undefined,
       status,
@@ -200,7 +201,7 @@ export function TaskForm({
         message: `คุณได้รับมอบหมายงาน: ${task.title}`,
         read: false,
         createdAt: new Date().toISOString(),
-        meta: { taskId: task.id, groupId },
+        meta: { taskId: task.id, teamId },
       });
     });
 
@@ -268,7 +269,7 @@ export function TaskForm({
                 }}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue>{(v: string | null) => v === "done" ? "เสร็จสิ้น" : v === "in_progress" ? "กำลังดำเนินการ" : "รอดำเนินการ"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todo">รอดำเนินการ</SelectItem>
@@ -363,7 +364,7 @@ export function TaskForm({
                       ) : (
                         <Square className="w-4 h-4 text-muted-foreground shrink-0" />
                       )}
-                      <span>{m.name}</span>
+                      <span>{resolveDisplayName(m.id, m.name, teamId)}</span>
                     </button>
                   );
                 })}
@@ -441,7 +442,7 @@ export function TaskForm({
                           ) : (
                             <Square className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                           )}
-                          <span>{m.name}</span>
+                          <span>{resolveDisplayName(m.id, m.name, teamId)}</span>
                         </button>
                       );
                     })}

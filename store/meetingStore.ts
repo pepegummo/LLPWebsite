@@ -10,7 +10,7 @@ interface MeetingState {
   addMeeting: (meeting: Meeting) => void;
   updateMeeting: (meeting: Meeting) => void;
   deleteMeeting: (meetingId: string) => void;
-  getMeetingsByGroup: (groupId: string) => Meeting[];
+  getMeetingsByTeam: (teamId: string) => Meeting[];
 }
 
 export const useMeetingStore = create<MeetingState>()(
@@ -27,9 +27,9 @@ export const useMeetingStore = create<MeetingState>()(
         set((state) => ({
           meetings: state.meetings.filter((m) => m.id !== meetingId),
         })),
-      getMeetingsByGroup: (groupId) =>
-        get().meetings.filter((m) => m.groupId === groupId),
+      getMeetingsByTeam: (teamId) =>
+        get().meetings.filter((m) => m.teamId === teamId),
     }),
-    { name: "meeting-storage" }
+    { name: "meeting-storage-v2" }
   )
 );

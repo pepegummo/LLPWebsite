@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useAuthStore } from "@/store";
+import { useAuthStore, useTeamStore } from "@/store";
+import { useDisplayName } from "@/lib/useDisplayName";
 import { GroupSwitcher } from "./GroupSwitcher";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -16,14 +17,13 @@ import {
   Paperclip,
   ClipboardCheck,
   LifeBuoy,
-  Users2,
-  ListChecks,
-  BarChart3,
-  TrendingUp,
-  MessageSquareMore,
-  Layers,
   LogOut,
   X,
+  Settings,
+  Layers,
+  Shield,
+  UserCircle,
+  Library,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,6 +31,7 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ReactNode;
+  leaderOnly?: boolean;
 }
 
 interface NavSection {
@@ -38,7 +39,7 @@ interface NavSection {
   items: NavItem[];
 }
 
-const studentNavSections: NavSection[] = [
+const navSections: NavSection[] = [
   {
     title: "ภาพรวม",
     items: [
@@ -63,22 +64,18 @@ const studentNavSections: NavSection[] = [
       { label: "แจ้งปัญหา", href: "/student/ticket", icon: <LifeBuoy className="w-4 h-4" /> },
     ],
   },
-];
-
-const staffNavSections: NavSection[] = [
-  {
-    items: [
-      { label: "แดชบอร์ด", href: "/staff/dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
-    ],
-  },
   {
     title: "จัดการ",
     items: [
-      { label: "กลุ่มโปรเจกต์", href: "/staff/setup", icon: <Users2 className="w-4 h-4" /> },
-      { label: "Rubric", href: "/staff/setup/rubric", icon: <ListChecks className="w-4 h-4" /> },
-      { label: "ผลประเมิน", href: "/staff/setup/eval-results", icon: <BarChart3 className="w-4 h-4" /> },
-      { label: "รายงาน", href: "/staff/setup/progress", icon: <TrendingUp className="w-4 h-4" /> },
-      { label: "Feedback", href: "/staff/feedback", icon: <MessageSquareMore className="w-4 h-4" /> },
+      { label: "Workspace", href: "/student/workspace", icon: <Layers className="w-4 h-4" /> },
+      { label: "Template Library", href: "/student/templates", icon: <Library className="w-4 h-4" />, leaderOnly: true },
+      { label: "ตั้งค่าทีม", href: "/student/setup", icon: <Shield className="w-4 h-4" />, leaderOnly: true },
+    ],
+  },
+  {
+    title: "บัญชี",
+    items: [
+      { label: "ข้อมูลส่วนตัว", href: "/student/profile", icon: <UserCircle className="w-4 h-4" /> },
     ],
   },
 ];
@@ -92,9 +89,14 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { currentUser, logout } = useAuthStore();
+  const { getUserRole } = useTeamStore();
 
-  const isStudent = currentUser?.role === "student";
-  const navSections = isStudent ? studentNavSections : staffNavSections;
+  const resolveDisplayName = useDisplayName();
+  const activeTeamId = currentUser?.activeTeamId ?? null;
+  const userRole = activeTeamId && currentUser
+    ? getUserRole(activeTeamId, currentUser.id)
+    : null;
+  const isLeaderOrAssistant = userRole === "team_leader" || userRole === "assistant_leader";
 
   const handleLogout = () => {
     logout();
@@ -102,21 +104,24 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     router.replace("/login");
   };
 
-  const roleLabel = () => {
-    if (currentUser?.role === "professor") return "อาจารย์";
-    if (currentUser?.role === "ta") return "TA";
-    return "นักศึกษา";
-  };
-
   const isActive = (href: string) => {
     if (
       href === "/student/dashboard" ||
-      href === "/staff/dashboard" ||
-      href === "/staff/setup"
+      href === "/student/workspace" ||
+      href === "/student/setup" ||
+      href === "/student/profile" ||
+      href === "/student/templates"
     ) {
       return pathname === href;
     }
     return pathname === href || pathname.startsWith(href + "/");
+  };
+
+  const roleLabel = () => {
+    if (userRole === "team_leader") return "Team Leader";
+    if (userRole === "assistant_leader") return "Assistant Leader";
+    if (userRole === "member") return "Member";
+    return "ไม่มีทีม";
   };
 
   return (
@@ -161,46 +166,52 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         {/* User info */}
         {currentUser && (
           <div className="px-4 py-3 border-b border-border shrink-0">
-            <p className="font-medium text-sm truncate leading-none">{currentUser.name}</p>
+            <p className="font-medium text-sm truncate leading-none">
+            {resolveDisplayName(currentUser.id, currentUser.name)}
+          </p>
             <p className="text-xs text-muted-foreground mt-1">{roleLabel()}</p>
           </div>
         )}
 
-        {/* Group switcher (students only) */}
-        {isStudent && (
-          <div className="border-b border-border shrink-0">
-            <GroupSwitcher />
-          </div>
-        )}
+        {/* Team switcher */}
+        <div className="border-b border-border shrink-0">
+          <GroupSwitcher />
+        </div>
 
         {/* Navigation */}
         <nav className="flex-1 py-2 overflow-y-auto">
-          {navSections.map((section, si) => (
-            <div key={si} className={cn(si > 0 && "mt-1")}>
-              {section.title && (
-                <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 select-none">
-                  {section.title}
-                </p>
-              )}
-              <div className="px-2 space-y-0.5">
-                {section.items.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
-                      isActive(item.href)
-                        ? "bg-primary/10 text-primary font-medium"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )}
-                  >
-                    {item.icon}
-                    <span>{item.label}</span>
-                  </Link>
-                ))}
+          {navSections.map((section, si) => {
+            const visibleItems = section.items.filter(
+              (item) => !item.leaderOnly || isLeaderOrAssistant
+            );
+            if (visibleItems.length === 0) return null;
+            return (
+              <div key={si} className={cn(si > 0 && "mt-1")}>
+                {section.title && (
+                  <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 select-none">
+                    {section.title}
+                  </p>
+                )}
+                <div className="px-2 space-y-0.5">
+                  {visibleItems.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                        isActive(item.href)
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </Link>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </nav>
 
         {/* Logout */}

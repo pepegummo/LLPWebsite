@@ -8,7 +8,7 @@ interface ActivityState {
   logs: ActivityLog[];
   addLog: (log: ActivityLog) => void;
   getLogsByTask: (taskId: string) => ActivityLog[];
-  getLogsByGroup: (groupId: string) => ActivityLog[];
+  getLogsByTeam: (teamId: string) => ActivityLog[];
 }
 
 export const useActivityStore = create<ActivityState>()(
@@ -19,11 +19,11 @@ export const useActivityStore = create<ActivityState>()(
         set((state) => ({ logs: [...state.logs, log] })),
       getLogsByTask: (taskId) =>
         get().logs.filter((l) => l.taskId === taskId),
-      getLogsByGroup: (groupId) =>
-        get().logs.filter((l) => l.groupId === groupId),
+      getLogsByTeam: (teamId) =>
+        get().logs.filter((l) => l.teamId === teamId),
     }),
     {
-      name: "activity-storage",
+      name: "activity-storage-v2",
     }
   )
 );

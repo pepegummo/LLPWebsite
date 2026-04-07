@@ -61,10 +61,7 @@ export function NotificationPanel() {
     useNotificationStore();
 
   const count = currentUser ? getUnreadCount(currentUser.id) : 0;
-  const notifHref =
-    currentUser?.role === "student"
-      ? "/student/notifications"
-      : "/staff/notifications";
+  const notifHref = "/student/notifications";
 
   const recentNotifications = currentUser
     ? notifications

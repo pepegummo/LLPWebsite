@@ -3,12 +3,13 @@
 import { useState } from "react";
 import {
   useAuthStore,
-  useGroupStore,
+  useTeamStore,
   useMeetingStore,
   useNotificationStore,
 } from "@/store";
 import { Meeting, MeetingNotificationSetting } from "@/types";
 import { mockUsers } from "@/lib/mockData";
+import { useDisplayName } from "@/lib/useDisplayName";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,10 +68,7 @@ const PRESET_NOTIFICATIONS: { minutesBefore: number; label: string }[] = [
 
 function formatDatetime(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleString("th-TH", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  return d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
 }
 
 interface MeetingFormState {
@@ -93,9 +91,9 @@ const EMPTY_FORM: MeetingFormState = {
 
 export default function StudentMeetingPage() {
   const { currentUser } = useAuthStore();
-  const { groups } = useGroupStore();
-  const { meetings, addMeeting, updateMeeting, deleteMeeting } =
-    useMeetingStore();
+  const { teams } = useTeamStore();
+  const resolveDisplayName = useDisplayName();
+  const { meetings, addMeeting, updateMeeting, deleteMeeting } = useMeetingStore();
   const { addNotification } = useNotificationStore();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -105,23 +103,17 @@ export default function StudentMeetingPage() {
 
   if (!currentUser) return null;
 
-  const activeGroup = groups.find((g) => g.id === currentUser.activeGroupId);
-  const members = activeGroup
-    ? mockUsers.filter((u) => activeGroup.memberIds.includes(u.id))
-    : [];
+  const activeTeamId = currentUser.activeTeamId ?? null;
+  const activeTeam = teams.find((t) => t.id === activeTeamId);
+  const memberIds = activeTeam ? activeTeam.members.map((m) => m.userId) : [];
+  const members = mockUsers.filter((u) => memberIds.includes(u.id));
 
-  const groupMeetings = meetings
-    .filter((m) => m.groupId === currentUser.activeGroupId)
-    .sort(
-      (a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime()
-    );
+  const teamMeetings = meetings
+    .filter((m) => m.teamId === activeTeamId)
+    .sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime());
 
-  const upcomingMeetings = groupMeetings.filter(
-    (m) => new Date(m.datetime) >= new Date()
-  );
-  const pastMeetings = groupMeetings.filter(
-    (m) => new Date(m.datetime) < new Date()
-  );
+  const upcomingMeetings = teamMeetings.filter((m) => new Date(m.datetime) >= new Date());
+  const pastMeetings = teamMeetings.filter((m) => new Date(m.datetime) < new Date());
 
   const openCreate = () => {
     setEditingMeeting(null);
@@ -131,9 +123,7 @@ export default function StudentMeetingPage() {
 
   const openEdit = (meeting: Meeting) => {
     setEditingMeeting(meeting);
-    const localDatetime = new Date(meeting.datetime)
-      .toISOString()
-      .slice(0, 16);
+    const localDatetime = new Date(meeting.datetime).toISOString().slice(0, 16);
     setForm({
       topic: meeting.topic,
       description: meeting.description ?? "",
@@ -156,38 +146,19 @@ export default function StudentMeetingPage() {
 
   const toggleNotification = (preset: { minutesBefore: number; label: string }) => {
     setForm((prev) => {
-      const exists = prev.notificationSettings.some(
-        (n) => n.minutesBefore === preset.minutesBefore
-      );
+      const exists = prev.notificationSettings.some((n) => n.minutesBefore === preset.minutesBefore);
       if (exists) {
-        return {
-          ...prev,
-          notificationSettings: prev.notificationSettings.filter(
-            (n) => n.minutesBefore !== preset.minutesBefore
-          ),
-        };
+        return { ...prev, notificationSettings: prev.notificationSettings.filter((n) => n.minutesBefore !== preset.minutesBefore) };
       } else {
-        return {
-          ...prev,
-          notificationSettings: [
-            ...prev.notificationSettings,
-            { id: generateId(), minutesBefore: preset.minutesBefore, label: preset.label },
-          ],
-        };
+        return { ...prev, notificationSettings: [...prev.notificationSettings, { id: generateId(), minutesBefore: preset.minutesBefore, label: preset.label }] };
       }
     });
   };
 
   const handleSave = () => {
-    if (!form.topic.trim()) {
-      toast.error("กรุณากรอกหัวข้อการประชุม");
-      return;
-    }
-    if (!form.datetime) {
-      toast.error("กรุณาเลือกวันและเวลาการประชุม");
-      return;
-    }
-    if (!currentUser.activeGroupId) return;
+    if (!form.topic.trim()) { toast.error("กรุณากรอกหัวข้อการประชุม"); return; }
+    if (!form.datetime) { toast.error("กรุณาเลือกวันและเวลาการประชุม"); return; }
+    if (!activeTeamId) return;
 
     if (editingMeeting) {
       const updated: Meeting = {
@@ -204,7 +175,7 @@ export default function StudentMeetingPage() {
     } else {
       const meeting: Meeting = {
         id: generateId(),
-        groupId: currentUser.activeGroupId,
+        teamId: activeTeamId,
         topic: form.topic.trim(),
         description: form.description.trim() || undefined,
         attendeeIds: form.attendeeIds,
@@ -216,7 +187,6 @@ export default function StudentMeetingPage() {
       };
       addMeeting(meeting);
 
-      // Send notifications to attendees
       form.attendeeIds.forEach((userId) => {
         if (userId === currentUser.id) return;
         addNotification({
@@ -226,7 +196,7 @@ export default function StudentMeetingPage() {
           message: `คุณถูกเพิ่มเข้าการประชุม: ${form.topic.trim()}`,
           read: false,
           createdAt: new Date().toISOString(),
-          meta: { groupId: currentUser.activeGroupId!, meetingId: meeting.id },
+          meta: { teamId: activeTeamId, meetingId: meeting.id },
         });
       });
 
@@ -252,11 +222,11 @@ export default function StudentMeetingPage() {
             <Video className="w-6 h-6" />
             การประชุม
           </h1>
-          {activeGroup && (
-            <p className="text-muted-foreground">กลุ่ม: {activeGroup.name}</p>
+          {activeTeam && (
+            <p className="text-muted-foreground">ทีม: {activeTeam.name}</p>
           )}
         </div>
-        {activeGroup && (
+        {activeTeam && (
           <Button size="sm" onClick={openCreate}>
             <PlusCircle className="w-4 h-4 mr-2" />
             สร้างการประชุม
@@ -264,107 +234,59 @@ export default function StudentMeetingPage() {
         )}
       </div>
 
-      {!activeGroup ? (
+      {!activeTeam ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            กรุณาเลือกกลุ่มก่อน
+            กรุณาเลือกทีมก่อน
           </CardContent>
         </Card>
       ) : (
         <>
-          {/* Upcoming meetings */}
           <div className="space-y-3">
             <h2 className="font-semibold">การประชุมที่กำลังจะมาถึง ({upcomingMeetings.length})</h2>
             {upcomingMeetings.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center text-muted-foreground text-sm">
-                  ไม่มีการประชุมที่กำลังจะมาถึง
-                </CardContent>
-              </Card>
+              <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">ไม่มีการประชุมที่กำลังจะมาถึง</CardContent></Card>
             ) : (
-              upcomingMeetings.map((meeting) =>
-                <MeetingCard
-                  key={meeting.id}
-                  meeting={meeting}
-                  onEdit={openEdit}
-                  onDelete={(m) => setDeleteTarget(m)}
-                />
-              )
+              upcomingMeetings.map((meeting) => (
+                <MeetingCard key={meeting.id} meeting={meeting} onEdit={openEdit} onDelete={(m) => setDeleteTarget(m)} />
+              ))
             )}
           </div>
 
-          {/* Past meetings */}
           {pastMeetings.length > 0 && (
             <div className="space-y-3">
-              <h2 className="font-semibold text-muted-foreground">
-                การประชุมที่ผ่านมา ({pastMeetings.length})
-              </h2>
-              {pastMeetings.map((meeting) =>
-                <MeetingCard
-                  key={meeting.id}
-                  meeting={meeting}
-                  onEdit={openEdit}
-                  onDelete={(m) => setDeleteTarget(m)}
-                  past
-                />
-              )}
+              <h2 className="font-semibold text-muted-foreground">การประชุมที่ผ่านมา ({pastMeetings.length})</h2>
+              {pastMeetings.map((meeting) => (
+                <MeetingCard key={meeting.id} meeting={meeting} onEdit={openEdit} onDelete={(m) => setDeleteTarget(m)} past />
+              ))}
             </div>
           )}
         </>
       )}
 
-      {/* Create / Edit dialog */}
       <Dialog open={formOpen} onOpenChange={(v) => { if (!v) { setFormOpen(false); setForm(EMPTY_FORM); } }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {editingMeeting ? "แก้ไขการประชุม" : "สร้างการประชุมใหม่"}
-            </DialogTitle>
+            <DialogTitle>{editingMeeting ? "แก้ไขการประชุม" : "สร้างการประชุมใหม่"}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* Topic */}
             <div className="space-y-1">
               <Label>หัวข้อการประชุม *</Label>
-              <Input
-                value={form.topic}
-                onChange={(e) => setForm((p) => ({ ...p, topic: e.target.value }))}
-                placeholder="หัวข้อ..."
-              />
+              <Input value={form.topic} onChange={(e) => setForm((p) => ({ ...p, topic: e.target.value }))} placeholder="หัวข้อ..." />
             </div>
-
-            {/* Description */}
             <div className="space-y-1">
               <Label>รายละเอียด</Label>
-              <Textarea
-                value={form.description}
-                onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                placeholder="รายละเอียดการประชุม..."
-                rows={2}
-              />
+              <Textarea value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="รายละเอียดการประชุม..." rows={2} />
             </div>
-
-            {/* Datetime */}
             <div className="space-y-1">
               <Label>วันและเวลา *</Label>
-              <Input
-                type="datetime-local"
-                value={form.datetime}
-                onChange={(e) => setForm((p) => ({ ...p, datetime: e.target.value }))}
-              />
+              <Input type="datetime-local" value={form.datetime} onChange={(e) => setForm((p) => ({ ...p, datetime: e.target.value }))} />
             </div>
-
-            {/* Meeting link */}
             <div className="space-y-1">
               <Label>ลิงก์การประชุม</Label>
-              <Input
-                value={form.link}
-                onChange={(e) => setForm((p) => ({ ...p, link: e.target.value }))}
-                placeholder="เช่น meet.google.com/abc หรือ zoom.us/j/..."
-              />
+              <Input value={form.link} onChange={(e) => setForm((p) => ({ ...p, link: e.target.value }))} placeholder="เช่น meet.google.com/abc หรือ zoom.us/j/..." />
             </div>
-
-            {/* Attendees */}
             <div className="space-y-2">
               <Label>ผู้เข้าร่วม</Label>
               <div className="grid grid-cols-1 gap-1">
@@ -375,25 +297,15 @@ export default function StudentMeetingPage() {
                       key={m.id}
                       type="button"
                       onClick={() => toggleAttendee(m.id)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors text-left ${
-                        checked
-                          ? "bg-primary/10 border border-primary/30"
-                          : "hover:bg-muted border border-transparent"
-                      }`}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors text-left ${checked ? "bg-primary/10 border border-primary/30" : "hover:bg-muted border border-transparent"}`}
                     >
-                      {checked ? (
-                        <CheckSquare className="w-4 h-4 text-primary shrink-0" />
-                      ) : (
-                        <Square className="w-4 h-4 text-muted-foreground shrink-0" />
-                      )}
-                      <span>{m.name}</span>
+                      {checked ? <CheckSquare className="w-4 h-4 text-primary shrink-0" /> : <Square className="w-4 h-4 text-muted-foreground shrink-0" />}
+                      <span>{resolveDisplayName(m.id, m.name, activeTeamId ?? "")}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
-
-            {/* Notification settings */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <Bell className="w-3.5 h-3.5" />
@@ -401,19 +313,13 @@ export default function StudentMeetingPage() {
               </Label>
               <div className="flex flex-wrap gap-2">
                 {PRESET_NOTIFICATIONS.map((preset) => {
-                  const active = form.notificationSettings.some(
-                    (n) => n.minutesBefore === preset.minutesBefore
-                  );
+                  const active = form.notificationSettings.some((n) => n.minutesBefore === preset.minutesBefore);
                   return (
                     <button
                       key={preset.minutesBefore}
                       type="button"
                       onClick={() => toggleNotification(preset)}
-                      className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${
-                        active
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-border hover:bg-muted"
-                      }`}
+                      className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${active ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}
                     >
                       {preset.label}
                     </button>
@@ -422,43 +328,28 @@ export default function StudentMeetingPage() {
               </div>
               {form.notificationSettings.length > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  จะส่งแจ้งเตือน: {form.notificationSettings
-                    .sort((a, b) => b.minutesBefore - a.minutesBefore)
-                    .map((n) => n.label)
-                    .join(", ")}
+                  จะส่งแจ้งเตือน: {form.notificationSettings.sort((a, b) => b.minutesBefore - a.minutesBefore).map((n) => n.label).join(", ")}
                 </p>
               )}
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setFormOpen(false); setForm(EMPTY_FORM); }}>
-              ยกเลิก
-            </Button>
-            <Button onClick={handleSave}>
-              {editingMeeting ? "บันทึก" : "สร้าง"}
-            </Button>
+            <Button variant="outline" onClick={() => { setFormOpen(false); setForm(EMPTY_FORM); }}>ยกเลิก</Button>
+            <Button onClick={handleSave}>{editingMeeting ? "บันทึก" : "สร้าง"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>ยืนยันการลบ</AlertDialogTitle>
-            <AlertDialogDescription>
-              คุณต้องการลบการประชุม &quot;{deleteTarget?.topic}&quot; หรือไม่?
-            </AlertDialogDescription>
+            <AlertDialogDescription>คุณต้องการลบการประชุม &quot;{deleteTarget?.topic}&quot; หรือไม่?</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteTarget && handleDelete(deleteTarget)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              ลบ
-            </AlertDialogAction>
+            <AlertDialogAction onClick={() => deleteTarget && handleDelete(deleteTarget)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">ลบ</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -477,10 +368,8 @@ function MeetingCard({
   onDelete: (m: Meeting) => void;
   past?: boolean;
 }) {
-  const attendees = meeting.attendeeIds
-    .map((id) => mockUsers.find((u) => u.id === id))
-    .filter(Boolean) as (typeof mockUsers)[0][];
-
+  const resolveDisplayName = useDisplayName();
+  const attendees = meeting.attendeeIds.map((id) => mockUsers.find((u) => u.id === id)).filter(Boolean) as (typeof mockUsers)[0][];
   const createdBy = mockUsers.find((u) => u.id === meeting.createdBy);
 
   return (
@@ -489,79 +378,43 @@ function MeetingCard({
         <div className="flex items-start justify-between gap-2">
           <div>
             <CardTitle className="text-base">{meeting.topic}</CardTitle>
-            {past && (
-              <Badge variant="secondary" className="text-xs mt-1">
-                ผ่านมาแล้ว
-              </Badge>
-            )}
+            {past && <Badge variant="secondary" className="text-xs mt-1">ผ่านมาแล้ว</Badge>}
           </div>
           <div className="flex gap-1 shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => onEdit(meeting)}
-            >
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(meeting)}>
               <Pencil className="w-3.5 h-3.5" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => onDelete(meeting)}
-            >
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onDelete(meeting)}>
               <Trash2 className="w-3.5 h-3.5 text-destructive" />
             </Button>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
-        {meeting.description && (
-          <p className="text-muted-foreground text-sm">{meeting.description}</p>
-        )}
-
+        {meeting.description && <p className="text-muted-foreground text-sm">{meeting.description}</p>}
         <div className="flex items-center gap-2 text-muted-foreground">
           <Calendar className="w-3.5 h-3.5 shrink-0" />
-          <span>{formatDatetime(meeting.datetime)}</span>
+          <span>{new Date(meeting.datetime).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}</span>
         </div>
-
         {attendees.length > 0 && (
           <div className="flex items-center gap-2 text-muted-foreground">
             <Users className="w-3.5 h-3.5 shrink-0" />
-            <span className="text-sm">{attendees.map((a) => a.name).join(", ")}</span>
+            <span className="text-sm">{attendees.map((a) => resolveDisplayName(a.id, a.name, meeting.teamId)).join(", ")}</span>
           </div>
         )}
-
         {meeting.link && (
-          <a
-            href={meeting.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-primary hover:underline text-sm"
-          >
+          <a href={meeting.link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline text-sm">
             <ExternalLink className="w-3.5 h-3.5 shrink-0" />
             {meeting.link}
           </a>
         )}
-
         {meeting.notificationSettings.length > 0 && (
           <div className="flex items-center gap-2 text-muted-foreground">
             <Bell className="w-3.5 h-3.5 shrink-0" />
-            <span className="text-xs">
-              แจ้งเตือน:{" "}
-              {meeting.notificationSettings
-                .sort((a, b) => b.minutesBefore - a.minutesBefore)
-                .map((n) => n.label)
-                .join(", ")}
-            </span>
+            <span className="text-xs">แจ้งเตือน: {meeting.notificationSettings.sort((a, b) => b.minutesBefore - a.minutesBefore).map((n) => n.label).join(", ")}</span>
           </div>
         )}
-
-        {createdBy && (
-          <p className="text-xs text-muted-foreground">
-            สร้างโดย: {createdBy.name}
-          </p>
-        )}
+        {createdBy && <p className="text-xs text-muted-foreground">สร้างโดย: {resolveDisplayName(createdBy.id, createdBy.name, meeting.teamId)}</p>}
       </CardContent>
     </Card>
   );

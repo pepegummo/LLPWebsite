@@ -15,12 +15,10 @@ export default function StudentLayout({
   const router = useRouter();
   const { currentUser } = useAuthStore();
   const [hydrated, setHydrated] = useState(false);
-  // Default open on desktop, closed on mobile — set after mount to avoid SSR mismatch
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     setHydrated(true);
-    // On mobile start with sidebar closed
     if (window.innerWidth < 768) setSidebarOpen(false);
   }, []);
 
@@ -28,8 +26,6 @@ export default function StudentLayout({
     if (!hydrated) return;
     if (!currentUser) {
       router.replace("/login");
-    } else if (currentUser.role !== "student") {
-      router.replace("/staff/dashboard");
     }
   }, [hydrated, currentUser, router]);
 
@@ -41,14 +37,13 @@ export default function StudentLayout({
     );
   }
 
-  if (!currentUser || currentUser.role !== "student") {
+  if (!currentUser) {
     return null;
   }
 
   return (
     <div className="min-h-screen bg-muted/10">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      {/* Content shifts on desktop (push mode), stays full-width on mobile (overlay mode) */}
       <div
         className={cn(
           "flex flex-col min-h-screen transition-[margin] duration-300 ease-in-out",

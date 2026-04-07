@@ -1,27 +1,41 @@
-export type Role = "student" | "ta" | "professor";
 export type TaskStatus = "todo" | "in_progress" | "done";
+export type TeamRole = "team_leader" | "assistant_leader" | "member";
 
 export interface User {
   id: string;
   name: string;
-  role: Role;
-  groupIds: string[];
-  activeGroupId: string | null;
+  email?: string;
+  activeTeamId?: string | null;
 }
 
-export interface Course {
-  id: string;
-  name: string;
-  professorId: string;
-  taIds: string[];
+export interface TeamMember {
+  userId: string;
+  role: TeamRole;
 }
 
-export interface Group {
+export interface Workspace {
   id: string;
-  courseId: string;
   name: string;
-  memberIds: string[];
+  ownerId: string;
+  createdAt: string;
+}
+
+export interface Project {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+}
+
+export interface Team {
+  id: string;
+  projectId: string;
+  workspaceId: string;
+  name: string;
+  members: TeamMember[];
   invitedIds: string[];
+  createdAt: string;
 }
 
 export interface Attachment {
@@ -40,7 +54,7 @@ export interface SubTask {
 
 export interface Task {
   id: string;
-  groupId: string;
+  teamId: string;
   title: string;
   description?: string;
   status: TaskStatus;
@@ -57,7 +71,7 @@ export interface ActivityLog {
   id: string;
   taskId: string;
   taskTitle: string;
-  groupId: string;
+  teamId: string;
   userId: string;
   action: string;
   timestamp: string;
@@ -65,7 +79,7 @@ export interface ActivityLog {
 
 export interface StandaloneLink {
   id: string;
-  groupId: string;
+  teamId: string;
   label: string;
   url: string;
   createdAt: string;
@@ -75,7 +89,7 @@ export interface StandaloneLink {
 
 export interface Tag {
   id: string;
-  groupId: string;
+  teamId: string;
   name: string;
   color: string;
 }
@@ -93,7 +107,7 @@ export type TicketStatus = "open" | "in_progress" | "resolved";
 
 export interface Ticket {
   id: string;
-  groupId: string;
+  teamId: string;
   studentId: string;
   title: string;
   description: string;
@@ -115,7 +129,7 @@ export interface EvaluationCriteria {
 
 export interface Evaluation {
   id: string;
-  groupId: string;
+  teamId: string;
   evaluatorId: string;
   evaluateeId: string;
   score: 1 | 2 | 3 | 4 | 5;
@@ -141,7 +155,7 @@ export interface MeetingNotificationSetting {
 
 export interface Meeting {
   id: string;
-  groupId: string;
+  teamId: string;
   topic: string;
   description?: string;
   attendeeIds: string[];
@@ -164,7 +178,7 @@ export interface Notification {
 
 export interface ChatChannel {
   id: string;
-  groupId: string;
+  teamId: string;
   name: string;
   createdBy: string;
   createdAt: string;
@@ -173,9 +187,62 @@ export interface ChatChannel {
 export interface ChatMessage {
   id: string;
   channelId: string;
-  groupId: string;
+  teamId: string;
   senderId: string;
   content: string;
   createdAt: string;
   mentions: string[];
+}
+
+export type ContactType = "Email" | "Facebook" | "IG" | "Line" | "Discord" | "Phone";
+
+export interface Contact {
+  type: ContactType;
+  value: string;
+}
+
+export interface UserProfile {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  bio?: string;
+  contacts: Contact[];
+  displayNames: Record<string, string>; // teamId -> displayName
+}
+
+// ─── Template Library ────────────────────────────────────────────────────────
+
+export type TemplateCategory = "project" | "rubric" | "task_structure" | "peer_evaluation";
+
+export interface ProjectTemplate {
+  name: string;
+  description: string;
+  defaultTaskTitles: string[];
+}
+
+export interface RubricTemplate {
+  weights: RubricWeights;
+}
+
+export interface TaskStructureTemplate {
+  title: string;
+  description?: string;
+  subTasks: { title: string; manHours?: number }[];
+  manHours?: number;
+  tags?: string[];
+}
+
+export interface PeerEvaluationTemplate {
+  criteriaLabels: { key: keyof RubricWeights; customLabel: string }[];
+  notes?: string;
+}
+
+export interface Template {
+  id: string;
+  category: TemplateCategory;
+  name: string;
+  description?: string;
+  createdBy: string; // userId
+  createdAt: string;
+  data: ProjectTemplate | RubricTemplate | TaskStructureTemplate | PeerEvaluationTemplate;
 }

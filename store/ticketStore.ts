@@ -9,7 +9,7 @@ interface TicketState {
   addTicket: (ticket: Ticket) => void;
   updateTicketStatus: (ticketId: string, status: TicketStatus) => void;
   addMessage: (ticketId: string, message: TicketMessage) => void;
-  getTicketsByGroup: (groupId: string) => Ticket[];
+  getTicketsByTeam: (teamId: string) => Ticket[];
   getTicketsByStudent: (studentId: string) => Ticket[];
 }
 
@@ -39,8 +39,8 @@ export const useTicketStore = create<TicketState>()(
               : t
           ),
         })),
-      getTicketsByGroup: (groupId) =>
-        get().tickets.filter((t) => t.groupId === groupId),
+      getTicketsByTeam: (teamId) =>
+        get().tickets.filter((t) => t.teamId === teamId),
       getTicketsByStudent: (studentId) =>
         get().tickets.filter((t) => t.studentId === studentId),
     }),

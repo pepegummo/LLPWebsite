@@ -12,7 +12,7 @@ interface ChatState {
   renameChannel: (channelId: string, name: string) => void;
   sendMessage: (message: ChatMessage) => void;
   deleteMessage: (messageId: string) => void;
-  getChannelsByGroup: (groupId: string) => ChatChannel[];
+  getChannelsByTeam: (teamId: string) => ChatChannel[];
   getMessagesByChannel: (channelId: string) => ChatMessage[];
 }
 
@@ -40,13 +40,13 @@ export const useChatStore = create<ChatState>()(
         set((state) => ({
           messages: state.messages.filter((m) => m.id !== messageId),
         })),
-      getChannelsByGroup: (groupId) =>
-        get().channels.filter((c) => c.groupId === groupId),
+      getChannelsByTeam: (teamId) =>
+        get().channels.filter((c) => c.teamId === teamId),
       getMessagesByChannel: (channelId) =>
         get().messages.filter((m) => m.channelId === channelId),
     }),
     {
-      name: "chat-storage-v1",
+      name: "chat-storage-v2",
     }
   )
 );

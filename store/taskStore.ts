@@ -16,7 +16,7 @@ interface TaskState {
   toggleSubTask: (taskId: string, subTaskId: string) => void;
   addSubTask: (taskId: string, subTask: SubTask) => void;
   removeSubTask: (taskId: string, subTaskId: string) => void;
-  getTasksByGroup: (groupId: string) => Task[];
+  getTasksByTeam: (teamId: string) => Task[];
 }
 
 export const useTaskStore = create<TaskState>()(
@@ -91,11 +91,11 @@ export const useTaskStore = create<TaskState>()(
               : t
           ),
         })),
-      getTasksByGroup: (groupId) =>
-        get().tasks.filter((t) => t.groupId === groupId),
+      getTasksByTeam: (teamId) =>
+        get().tasks.filter((t) => t.teamId === teamId),
     }),
     {
-      name: "task-storage-v2",
+      name: "task-storage-v3",
     }
   )
 );

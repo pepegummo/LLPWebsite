@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAuthStore, useTaskStore, useGroupStore, useMeetingStore } from "@/store";
+import { useAuthStore, useTaskStore, useTeamStore, useMeetingStore } from "@/store";
 import { Task, Meeting } from "@/types";
 import { mockUsers } from "@/lib/mockData";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,8 +54,8 @@ function normalizeUrl(url: string): string {
 export default function StudentCalendarPage() {
   const { currentUser } = useAuthStore();
   const { tasks } = useTaskStore();
-  const { groups } = useGroupStore();
-  const { meetings } = useMeetingStore();
+  const { teams } = useTeamStore();
+  const { getMeetingsByTeam } = useMeetingStore();
 
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -65,45 +65,32 @@ export default function StudentCalendarPage() {
 
   if (!currentUser) return null;
 
-  const activeGroupId = currentUser.activeGroupId;
-  const activeGroup = groups.find((g) => g.id === activeGroupId);
-  const groupTasks = tasks.filter((t) => t.groupId === activeGroupId);
-  const groupMeetings = meetings.filter((m) => m.groupId === activeGroupId);
+  const activeTeamId = currentUser.activeTeamId ?? null;
+  const activeTeam = teams.find((t) => t.id === activeTeamId);
+  const teamTasks = tasks.filter((t) => t.teamId === activeTeamId);
+  const teamMeetings = activeTeamId ? getMeetingsByTeam(activeTeamId) : [];
 
   const prevMonth = () => {
-    if (month === 0) {
-      setMonth(11);
-      setYear((y) => y - 1);
-    } else {
-      setMonth((m) => m - 1);
-    }
+    if (month === 0) { setMonth(11); setYear((y) => y - 1); } else { setMonth((m) => m - 1); }
     setSelectedDay(null);
   };
 
   const nextMonth = () => {
-    if (month === 11) {
-      setMonth(0);
-      setYear((y) => y + 1);
-    } else {
-      setMonth((m) => m + 1);
-    }
+    if (month === 11) { setMonth(0); setYear((y) => y + 1); } else { setMonth((m) => m + 1); }
     setSelectedDay(null);
   };
 
-  // Tasks with due date in this month
-  const tasksThisMonth = groupTasks.filter((t) => {
+  const tasksThisMonth = teamTasks.filter((t) => {
     if (!t.dueDate) return false;
     const d = new Date(t.dueDate);
     return d.getFullYear() === year && d.getMonth() === month;
   });
 
-  // Meetings in this month
-  const meetingsThisMonth = groupMeetings.filter((m) => {
+  const meetingsThisMonth = teamMeetings.filter((m) => {
     const d = new Date(m.datetime);
     return d.getFullYear() === year && d.getMonth() === month;
   });
 
-  // Map day → tasks
   const tasksByDay: Record<number, Task[]> = {};
   tasksThisMonth.forEach((t) => {
     const day = new Date(t.dueDate!).getDate();
@@ -111,7 +98,6 @@ export default function StudentCalendarPage() {
     tasksByDay[day].push(t);
   });
 
-  // Map day → meetings
   const meetingsByDay: Record<number, Meeting[]> = {};
   meetingsThisMonth.forEach((m) => {
     const day = new Date(m.datetime).getDate();
@@ -125,12 +111,6 @@ export default function StudentCalendarPage() {
   const selectedDayTasks = selectedDay ? (tasksByDay[selectedDay] ?? []) : [];
   const selectedDayMeetings = selectedDay ? (meetingsByDay[selectedDay] ?? []) : [];
 
-  // --- Timeline: tasks sorted by due date ---
-  const timelineTasks = [...groupTasks]
-    .filter((t) => t.dueDate)
-    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
-
-  // Compute timeline range
   const timelineStart = new Date(year, month, 1);
   const timelineEnd = new Date(year, month + 1, 0);
   const totalDays = timelineEnd.getDate();
@@ -138,18 +118,12 @@ export default function StudentCalendarPage() {
   function getBarStyle(task: Task) {
     const start = new Date(task.createdAt);
     const end = task.dueDate ? new Date(task.dueDate) : start;
-
     const clampedStart = start < timelineStart ? timelineStart : start;
     const clampedEnd = end > timelineEnd ? timelineEnd : end;
-
     if (clampedStart > timelineEnd || clampedEnd < timelineStart) return null;
-
-    const leftPct =
-      ((clampedStart.getDate() - 1) / totalDays) * 100;
-    const rightPct =
-      ((timelineEnd.getDate() - clampedEnd.getDate()) / totalDays) * 100;
+    const leftPct = ((clampedStart.getDate() - 1) / totalDays) * 100;
+    const rightPct = ((timelineEnd.getDate() - clampedEnd.getDate()) / totalDays) * 100;
     const widthPct = 100 - leftPct - rightPct;
-
     return { left: `${leftPct}%`, width: `${Math.max(widthPct, 2)}%` };
   }
 
@@ -160,38 +134,24 @@ export default function StudentCalendarPage() {
           <CalendarDays className="w-6 h-6" />
           ปฏิทิน / Timeline
         </h1>
-        {activeGroup && (
-          <p className="text-muted-foreground">กลุ่ม: {activeGroup.name}</p>
+        {activeTeam && (
+          <p className="text-muted-foreground">ทีม: {activeTeam.name}</p>
         )}
       </div>
 
-      {!activeGroupId ? (
+      {!activeTeamId ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            กรุณาเลือกกลุ่มก่อน
+            กรุณาเลือกทีมก่อน
           </CardContent>
         </Card>
       ) : (
         <>
-          {/* Tab switch */}
           <div className="flex gap-2">
-            <Button
-              variant={tab === "calendar" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setTab("calendar")}
-            >
-              ปฏิทิน
-            </Button>
-            <Button
-              variant={tab === "timeline" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setTab("timeline")}
-            >
-              Timeline
-            </Button>
+            <Button variant={tab === "calendar" ? "default" : "outline"} size="sm" onClick={() => setTab("calendar")}>ปฏิทิน</Button>
+            <Button variant={tab === "timeline" ? "default" : "outline"} size="sm" onClick={() => setTab("timeline")}>Timeline</Button>
           </div>
 
-          {/* Month navigation */}
           <div className="flex items-center gap-3">
             <Button variant="outline" size="icon" onClick={prevMonth}>
               <ChevronLeft className="w-4 h-4" />
@@ -206,85 +166,43 @@ export default function StudentCalendarPage() {
 
           {tab === "calendar" && (
             <div className="space-y-4">
-              {/* Calendar grid */}
               <Card>
                 <CardContent className="p-4">
-                  {/* Header */}
                   <div className="grid grid-cols-7 mb-2">
                     {DAYS_TH.map((d) => (
-                      <div
-                        key={d}
-                        className="text-center text-xs font-medium text-muted-foreground py-1"
-                      >
-                        {d}
-                      </div>
+                      <div key={d} className="text-center text-xs font-medium text-muted-foreground py-1">{d}</div>
                     ))}
                   </div>
-
-                  {/* Days grid */}
                   <div className="grid grid-cols-7 gap-1">
-                    {/* Empty cells before first day */}
                     {Array.from({ length: firstDay }).map((_, i) => (
                       <div key={`empty-${i}`} className="h-16" />
                     ))}
-
-                    {/* Day cells */}
                     {Array.from({ length: daysInMonth }).map((_, i) => {
                       const day = i + 1;
                       const dayTasks = tasksByDay[day] ?? [];
                       const dayMeetings = meetingsByDay[day] ?? [];
-                      const isToday =
-                        today.getDate() === day &&
-                        today.getMonth() === month &&
-                        today.getFullYear() === year;
+                      const isToday = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
                       const isSelected = selectedDay === day;
-
                       return (
                         <button
                           key={day}
-                          onClick={() =>
-                            setSelectedDay(isSelected ? null : day)
-                          }
+                          onClick={() => setSelectedDay(isSelected ? null : day)}
                           className={cn(
                             "h-16 rounded-md border text-left p-1 transition-colors",
-                            isSelected
-                              ? "border-primary bg-primary/5"
-                              : "border-border hover:border-primary/40 hover:bg-muted/50",
+                            isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 hover:bg-muted/50",
                             isToday && !isSelected && "border-primary/60 bg-primary/5"
                           )}
                         >
-                          <span
-                            className={cn(
-                              "text-xs font-medium block",
-                              isToday && "text-primary font-bold"
-                            )}
-                          >
-                            {day}
-                          </span>
+                          <span className={cn("text-xs font-medium block", isToday && "text-primary font-bold")}>{day}</span>
                           <div className="flex flex-col gap-0.5 mt-0.5 overflow-hidden">
                             {dayTasks.slice(0, 1).map((t) => (
-                              <span
-                                key={t.id}
-                                className={cn(
-                                  "text-[10px] px-1 rounded truncate text-white",
-                                  statusColor(t.status)
-                                )}
-                              >
-                                {t.title}
-                              </span>
+                              <span key={t.id} className={cn("text-[10px] px-1 rounded truncate text-white", statusColor(t.status))}>{t.title}</span>
                             ))}
                             {dayMeetings.slice(0, 1).map((m) => (
-                              <span
-                                key={m.id}
-                                className="text-[10px] px-1 rounded truncate text-white bg-violet-500"
-                              >
-                                📹 {m.topic}
-                              </span>
+                              <span key={m.id} className="text-[10px] px-1 rounded truncate text-white bg-violet-500">📹 {m.topic}</span>
                             ))}
                             {(dayTasks.length + dayMeetings.length) > 2 && (
-                              <span className="text-[10px] text-muted-foreground">
-                                +{dayTasks.length + dayMeetings.length - 2} อื่นๆ
-                              </span>
+                              <span className="text-[10px] text-muted-foreground">+{dayTasks.length + dayMeetings.length - 2} อื่นๆ</span>
                             )}
                           </div>
                         </button>
@@ -294,22 +212,17 @@ export default function StudentCalendarPage() {
                 </CardContent>
               </Card>
 
-              {/* Selected day details */}
               {selectedDay !== null && (
                 <div className="space-y-3">
                   <h3 className="font-semibold text-sm">
                     {selectedDay} {MONTHS_TH[month]} {year + 543}
                     {" "}({selectedDayTasks.length} งาน, {selectedDayMeetings.length} ประชุม)
                   </h3>
-
-                  {/* Tasks */}
                   {selectedDayTasks.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-xs font-medium text-muted-foreground">งานครบกำหนด</p>
                       {selectedDayTasks.map((task) => {
-                        const assignees = task.assigneeIds
-                          .map((id) => mockUsers.find((u) => u.id === id))
-                          .filter(Boolean);
+                        const assignees = task.assigneeIds.map((id) => mockUsers.find((u) => u.id === id)).filter(Boolean);
                         return (
                           <Card key={task.id}>
                             <CardContent className="p-3">
@@ -330,13 +243,7 @@ export default function StudentCalendarPage() {
                                   )}
                                 </div>
                                 <Badge
-                                  variant={
-                                    task.status === "done"
-                                      ? "default"
-                                      : task.status === "in_progress"
-                                      ? "secondary"
-                                      : "outline"
-                                  }
+                                  variant={task.status === "done" ? "default" : task.status === "in_progress" ? "secondary" : "outline"}
                                   className="text-xs shrink-0"
                                 >
                                   {statusLabel(task.status)}
@@ -348,19 +255,12 @@ export default function StudentCalendarPage() {
                       })}
                     </div>
                   )}
-
-                  {/* Meetings */}
                   {selectedDayMeetings.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-xs font-medium text-muted-foreground">การประชุม</p>
                       {selectedDayMeetings.map((meeting) => {
-                        const attendees = meeting.attendeeIds
-                          .map((id) => mockUsers.find((u) => u.id === id))
-                          .filter(Boolean);
-                        const time = new Date(meeting.datetime).toLocaleTimeString("th-TH", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        });
+                        const attendees = meeting.attendeeIds.map((id) => mockUsers.find((u) => u.id === id)).filter(Boolean);
+                        const time = new Date(meeting.datetime).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
                         return (
                           <Card key={meeting.id} className="border-violet-200 bg-violet-50">
                             <CardContent className="p-3">
@@ -375,12 +275,7 @@ export default function StudentCalendarPage() {
                                     </p>
                                   )}
                                   {meeting.link && (
-                                    <a
-                                      href={normalizeUrl(meeting.link)}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-1 text-xs text-primary hover:underline mt-1"
-                                    >
+                                    <a href={normalizeUrl(meeting.link)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline mt-1">
                                       <ExternalLink className="w-3 h-3" />
                                       เข้าร่วมประชุม
                                     </a>
@@ -393,168 +288,94 @@ export default function StudentCalendarPage() {
                       })}
                     </div>
                   )}
-
                   {selectedDayTasks.length === 0 && selectedDayMeetings.length === 0 && (
                     <p className="text-sm text-muted-foreground">ไม่มีกิจกรรมในวันนี้</p>
                   )}
                 </div>
               )}
 
-              {/* Legend */}
               <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-slate-400 inline-block" />
-                  รอดำเนินการ
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-blue-500 inline-block" />
-                  กำลังทำ
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-green-500 inline-block" />
-                  เสร็จสิ้น
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-violet-500 inline-block" />
-                  การประชุม
-                </span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-slate-400 inline-block" />รอดำเนินการ</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-blue-500 inline-block" />กำลังทำ</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-green-500 inline-block" />เสร็จสิ้น</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-violet-500 inline-block" />การประชุม</span>
               </div>
             </div>
           )}
 
           {tab === "timeline" && (
             <div className="space-y-4">
-              {timelineTasks.length === 0 ? (
+              {teamTasks.filter((t) => t.dueDate).length === 0 ? (
                 <Card>
-                  <CardContent className="py-12 text-center text-muted-foreground">
-                    ไม่มีงานที่มีวันครบกำหนด
-                  </CardContent>
+                  <CardContent className="py-12 text-center text-muted-foreground">ไม่มีงานที่มีวันครบกำหนด</CardContent>
                 </Card>
               ) : (
                 <Card>
                   <CardContent className="p-4">
-                    {/* Date header */}
                     <div className="ml-40 mb-2 relative h-5">
                       {[1, 8, 15, 22, 29].filter((d) => d <= totalDays).map((d) => (
-                        <span
-                          key={d}
-                          className="absolute text-xs text-muted-foreground"
-                          style={{
-                            left: `${((d - 1) / totalDays) * 100}%`,
-                            transform: "translateX(-50%)",
-                          }}
-                        >
-                          {d}
-                        </span>
+                        <span key={d} className="absolute text-xs text-muted-foreground" style={{ left: `${((d - 1) / totalDays) * 100}%`, transform: "translateX(-50%)" }}>{d}</span>
                       ))}
                     </div>
-
-                    {/* Timeline rows — tasks */}
                     <div className="space-y-2">
-                      {groupTasks.filter((t) => t.dueDate).map((task) => {
+                      {teamTasks.filter((t) => t.dueDate).map((task) => {
                         const barStyle = getBarStyle(task);
-                        const assignees = task.assigneeIds
-                          .map((id) => mockUsers.find((u) => u.id === id))
-                          .filter(Boolean);
-                        const isOverdue =
-                          task.dueDate &&
-                          task.status !== "done" &&
-                          new Date(task.dueDate) < new Date();
-
+                        const assignees = task.assigneeIds.map((id) => mockUsers.find((u) => u.id === id)).filter(Boolean);
+                        const isOverdue = task.dueDate && task.status !== "done" && new Date(task.dueDate) < new Date();
                         return (
                           <div key={task.id} className="flex items-center gap-2">
                             <div className="w-40 shrink-0 pr-2">
                               <p className="text-xs font-medium truncate">{task.title}</p>
                               {assignees.length > 0 && (
-                                <p className="text-[10px] text-muted-foreground truncate">
-                                  {assignees.map((a) => a!.name).join(", ")}
-                                </p>
+                                <p className="text-[10px] text-muted-foreground truncate">{assignees.map((a) => a!.name).join(", ")}</p>
                               )}
                             </div>
                             <div className="flex-1 relative h-7 bg-muted rounded">
                               {barStyle && (
                                 <div
-                                  className={cn(
-                                    "absolute h-full rounded flex items-center px-1.5 overflow-hidden",
-                                    task.status === "done"
-                                      ? "bg-green-500"
-                                      : task.status === "in_progress"
-                                      ? "bg-blue-500"
-                                      : isOverdue
-                                      ? "bg-destructive"
-                                      : "bg-slate-400"
+                                  className={cn("absolute h-full rounded flex items-center px-1.5 overflow-hidden",
+                                    task.status === "done" ? "bg-green-500" : task.status === "in_progress" ? "bg-blue-500" : isOverdue ? "bg-destructive" : "bg-slate-400"
                                   )}
                                   style={barStyle}
                                   title={`${task.title} — ${new Date(task.dueDate!).toLocaleDateString("th-TH")}`}
                                 >
-                                  <span className="text-[10px] text-white truncate">
-                                    {task.manHours != null ? `${task.manHours}h` : ""}
-                                  </span>
+                                  <span className="text-[10px] text-white truncate">{task.manHours != null ? `${task.manHours}h` : ""}</span>
                                 </div>
                               )}
                             </div>
                           </div>
                         );
                       })}
-
-                      {/* Meeting markers */}
-                      {groupMeetings
-                        .filter((m) => {
-                          const d = new Date(m.datetime);
-                          return d.getFullYear() === year && d.getMonth() === month;
-                        })
-                        .map((meeting) => {
-                          const d = new Date(meeting.datetime);
-                          const dayOfMonth = d.getDate();
-                          const leftPct = ((dayOfMonth - 1) / totalDays) * 100;
-
-                          return (
-                            <div key={meeting.id} className="flex items-center gap-2">
-                              <div className="w-40 shrink-0 pr-2">
-                                <p className="text-xs font-medium truncate text-violet-600">
-                                  📹 {meeting.topic}
-                                </p>
-                                <p className="text-[10px] text-muted-foreground">
-                                  {d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
-                                </p>
-                              </div>
-                              <div className="flex-1 relative h-7 bg-muted rounded">
-                                <div
-                                  className="absolute h-full w-1 bg-violet-500 rounded"
-                                  style={{ left: `${leftPct}%` }}
-                                  title={`${meeting.topic} — ${d.toLocaleDateString("th-TH")}`}
-                                />
-                              </div>
+                      {teamMeetings.filter((m) => {
+                        const d = new Date(m.datetime);
+                        return d.getFullYear() === year && d.getMonth() === month;
+                      }).map((meeting) => {
+                        const d = new Date(meeting.datetime);
+                        const dayOfMonth = d.getDate();
+                        const leftPct = ((dayOfMonth - 1) / totalDays) * 100;
+                        return (
+                          <div key={meeting.id} className="flex items-center gap-2">
+                            <div className="w-40 shrink-0 pr-2">
+                              <p className="text-xs font-medium truncate text-violet-600">📹 {meeting.topic}</p>
+                              <p className="text-[10px] text-muted-foreground">{d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}</p>
                             </div>
-                          );
-                        })}
+                            <div className="flex-1 relative h-7 bg-muted rounded">
+                              <div className="absolute h-full w-1 bg-violet-500 rounded" style={{ left: `${leftPct}%` }} title={`${meeting.topic} — ${d.toLocaleDateString("th-TH")}`} />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>
               )}
 
-              {/* Legend */}
               <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-slate-400 inline-block" />
-                  รอดำเนินการ
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-blue-500 inline-block" />
-                  กำลังทำ
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-green-500 inline-block" />
-                  เสร็จสิ้น
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-destructive inline-block" />
-                  เกินกำหนด
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-violet-500 inline-block" />
-                  การประชุม
-                </span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-slate-400 inline-block" />รอดำเนินการ</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-blue-500 inline-block" />กำลังทำ</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-green-500 inline-block" />เสร็จสิ้น</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-destructive inline-block" />เกินกำหนด</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-violet-500 inline-block" />การประชุม</span>
               </div>
             </div>
           )}

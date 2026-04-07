@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Evaluation, EvaluationCriteria } from "@/types";
 import { useEvaluationStore, useAuthStore, useRubricStore } from "@/store";
+import { useDisplayName } from "@/lib/useDisplayName";
 import { User } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -72,7 +73,7 @@ function CriteriaStars({
 
 interface EvaluationFormProps {
   evaluatee: User;
-  groupId: string;
+  teamId: string;
 }
 
 const EMPTY_CRITERIA: EvaluationCriteria = {
@@ -84,11 +85,13 @@ const EMPTY_CRITERIA: EvaluationCriteria = {
   effort: 0,
 };
 
-export function EvaluationForm({ evaluatee, groupId }: EvaluationFormProps) {
+export function EvaluationForm({ evaluatee, teamId }: EvaluationFormProps) {
   const { currentUser } = useAuthStore();
   const { addEvaluation, updateEvaluation, hasEvaluated, evaluations } =
     useEvaluationStore();
   const { weights } = useRubricStore();
+  const resolveDisplayName = useDisplayName();
+  const evaluateeName = resolveDisplayName(evaluatee.id, evaluatee.name, teamId);
 
   const alreadyEvaluated = currentUser
     ? hasEvaluated(currentUser.id, evaluatee.id)
@@ -134,12 +137,12 @@ export function EvaluationForm({ evaluatee, groupId }: EvaluationFormProps) {
         comment: comment.trim(),
         submittedAt: new Date().toISOString(),
       });
-      toast.success(`แก้ไขการประเมิน ${evaluatee.name} แล้ว`);
+      toast.success(`แก้ไขการประเมิน ${evaluateeName} แล้ว`);
       setIsEditing(false);
     } else {
       const evaluation: Evaluation = {
         id: generateId(),
-        groupId,
+        teamId,
         evaluatorId: currentUser.id,
         evaluateeId: evaluatee.id,
         score,
@@ -148,7 +151,7 @@ export function EvaluationForm({ evaluatee, groupId }: EvaluationFormProps) {
         submittedAt: new Date().toISOString(),
       };
       addEvaluation(evaluation);
-      toast.success(`ประเมิน ${evaluatee.name} แล้ว`);
+      toast.success(`ประเมิน ${evaluateeName} แล้ว`);
     }
   };
 
@@ -158,7 +161,7 @@ export function EvaluationForm({ evaluatee, groupId }: EvaluationFormProps) {
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
             <CheckCircle className="w-4 h-4 text-green-600" />
-            {evaluatee.name}
+            {evaluateeName}
             <Badge
               variant="secondary"
               className="text-xs bg-green-100 text-green-700"
@@ -232,7 +235,7 @@ export function EvaluationForm({ evaluatee, groupId }: EvaluationFormProps) {
     <Card className={isEditing ? "border-primary/40" : ""}>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
-          {evaluatee.name}
+          {evaluateeName}
           {isEditing && (
             <Badge variant="outline" className="text-xs">
               กำลังแก้ไข

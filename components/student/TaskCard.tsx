@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Task, TaskStatus } from "@/types";
 import { useTaskStore, useAuthStore, useActivityStore, useTagStore } from "@/store";
 import { mockUsers } from "@/lib/mockData";
+import { useDisplayName } from "@/lib/useDisplayName";
 import { TaskForm } from "./TaskForm";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -69,8 +70,9 @@ export function TaskCard({ task }: TaskCardProps) {
   const { updateTask, deleteTask, moveTask, toggleSubTask } = useTaskStore();
   const { currentUser } = useAuthStore();
   const { addLog, getLogsByTask } = useActivityStore();
-  const { getTagsByGroup } = useTagStore();
-  const taskTags = getTagsByGroup(task.groupId).filter((t) =>
+  const { getTagsByTeam } = useTagStore();
+  const resolveDisplayName = useDisplayName();
+  const taskTags = getTagsByTeam(task.teamId).filter((t) =>
     (task.tags ?? []).includes(t.id)
   );
   const [editOpen, setEditOpen] = useState(false);
@@ -110,7 +112,7 @@ export function TaskCard({ task }: TaskCardProps) {
         id: Math.random().toString(36).substring(2, 11),
         taskId: task.id,
         taskTitle: task.title,
-        groupId: task.groupId,
+        teamId: task.teamId,
         userId: currentUser.id,
         action: "ลบงาน",
         timestamp: new Date().toISOString(),
@@ -134,7 +136,7 @@ export function TaskCard({ task }: TaskCardProps) {
         id: Math.random().toString(36).substring(2, 11),
         taskId: task.id,
         taskTitle: task.title,
-        groupId: task.groupId,
+        teamId: task.teamId,
         userId: currentUser.id,
         action: `เปลี่ยนสถานะ: ${oldLabel} → ${newLabel}`,
         timestamp: new Date().toISOString(),
@@ -152,7 +154,7 @@ export function TaskCard({ task }: TaskCardProps) {
         id: Math.random().toString(36).substring(2, 11),
         taskId: task.id,
         taskTitle: task.title,
-        groupId: task.groupId,
+        teamId: task.teamId,
         userId: currentUser.id,
         action: `${subTask.completed ? "ยกเลิก" : "ทำเสร็จ"} sub-task: ${subTask.title}`,
         timestamp: new Date().toISOString(),
@@ -170,8 +172,10 @@ export function TaskCard({ task }: TaskCardProps) {
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 
-  const logUserName = (userId: string) =>
-    mockUsers.find((u) => u.id === userId)?.name ?? userId;
+  const logUserName = (userId: string) => {
+    const fallback = mockUsers.find((u) => u.id === userId)?.name ?? userId;
+    return resolveDisplayName(userId, fallback, task.teamId);
+  };
 
   return (
     <>
@@ -218,7 +222,7 @@ export function TaskCard({ task }: TaskCardProps) {
               <div className="flex flex-wrap gap-1.5 mt-2">
                 <Select value={task.status} onValueChange={handleStatusChange}>
                   <SelectTrigger className="h-6 text-xs w-auto px-2 py-0">
-                    <SelectValue />
+                    <SelectValue>{(v: string | null) => v === "done" ? "เสร็จสิ้น" : v === "in_progress" ? "กำลังดำเนินการ" : "รอดำเนินการ"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todo">รอดำเนินการ</SelectItem>
@@ -245,7 +249,7 @@ export function TaskCard({ task }: TaskCardProps) {
                 {assignees.length > 0 && (
                   <span className="flex items-center gap-1">
                     <Users className="w-3 h-3" />
-                    {assignees.map((a) => a.name).join(", ")}
+                    {assignees.map((a) => resolveDisplayName(a.id, a.name, task.teamId)).join(", ")}
                   </span>
                 )}
                 {task.manHours != null && (
@@ -298,7 +302,7 @@ export function TaskCard({ task }: TaskCardProps) {
                         {subAssignees.length > 0 && (
                           <p className="text-[10px] text-muted-foreground/70 ml-5 flex items-center gap-0.5">
                             <Users className="w-2.5 h-2.5" />
-                            {subAssignees.map((a) => a.name).join(", ")}
+                            {subAssignees.map((a) => resolveDisplayName(a.id, a.name, task.teamId)).join(", ")}
                           </p>
                         )}
                       </div>
@@ -395,7 +399,7 @@ export function TaskCard({ task }: TaskCardProps) {
                 id: Math.random().toString(36).substring(2, 11),
                 taskId: t.id,
                 taskTitle: t.title,
-                groupId: t.groupId,
+                teamId: t.teamId,
                 userId: currentUser.id,
                 action: "แก้ไขข้อมูลงาน",
                 timestamp: new Date().toISOString(),
@@ -404,7 +408,7 @@ export function TaskCard({ task }: TaskCardProps) {
             toast.success("อัปเดตงานแล้ว");
           }}
           initialTask={task}
-          groupId={task.groupId}
+          teamId={task.teamId}
         />
       )}
 

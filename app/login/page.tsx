@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthStore, useGroupStore } from "@/store";
+import { useAuthStore, useTeamStore } from "@/store";
 import { mockUsers } from "@/lib/mockData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ import { ClipboardList, Lock, Mail, Eye, EyeOff, FlaskConical, ChevronDown, Chev
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuthStore();
-  const { groups } = useGroupStore();
+  const { getTeamsByUser } = useTeamStore();
 
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [showPassword, setShowPassword] = useState(false);
@@ -38,30 +38,16 @@ export default function LoginPage() {
       return;
     }
 
-    const userGroupIds = groups
-      .filter((g) => g.memberIds.includes(user.id))
-      .map((g) => g.id);
+    const userTeams = getTeamsByUser(user.id);
+    const defaultTeamId = userTeams.length > 0 ? userTeams[0].id : null;
 
     login({
       ...user,
-      groupIds: userGroupIds,
-      activeGroupId: userGroupIds.length > 0 ? userGroupIds[0] : null,
+      activeTeamId: defaultTeamId,
     });
 
     toast.success(`ยินดีต้อนรับ ${user.name}!`);
-    router.replace(user.role === "student" ? "/student/dashboard" : "/staff/dashboard");
-  };
-
-  const roleLabel = (role: string) => {
-    if (role === "professor") return "อาจารย์";
-    if (role === "ta") return "TA";
-    return "นักศึกษา";
-  };
-
-  const roleBadgeColor = (role: string) => {
-    if (role === "professor") return "bg-purple-100 text-purple-700";
-    if (role === "ta") return "bg-blue-100 text-blue-700";
-    return "bg-green-100 text-green-700";
+    router.replace("/student/dashboard");
   };
 
   const selectedUser = mockUsers.find((u) => u.id === selectedUserId);
@@ -179,31 +165,18 @@ export default function LoginPage() {
                   <Select
                     value={selectedUserId}
                     onValueChange={(v) => setSelectedUserId(v ?? "")}
-                    items={Object.fromEntries(mockUsers.map((u) => [u.id, u.name]))}
                   >
                     <SelectTrigger className="bg-white border-slate-200">
-                      <SelectValue placeholder="เลือกผู้ใช้..." />
+                      <SelectValue>
+                        {(v: string | null) => v ? (mockUsers.find((u) => u.id === v)?.name ?? "เลือกผู้ใช้...") : "เลือกผู้ใช้..."}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {/* Group by role */}
-                      {(["professor", "ta", "student"] as const).map((role) => {
-                        const roleUsers = mockUsers.filter((u) => u.role === role);
-                        if (roleUsers.length === 0) return null;
-                        return (
-                          <div key={role}>
-                            <div className="px-2 py-1.5 text-xs font-medium text-slate-400 uppercase tracking-wide">
-                              {roleLabel(role)}
-                            </div>
-                            {roleUsers.map((user) => (
-                              <SelectItem key={user.id} value={user.id}>
-                                <div className="flex items-center gap-2">
-                                  <span>{user.name}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </div>
-                        );
-                      })}
+                      {mockUsers.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -224,9 +197,6 @@ export default function LoginPage() {
                         ID: {selectedUser.id}
                       </p>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${roleBadgeColor(selectedUser.role)}`}>
-                      {roleLabel(selectedUser.role)}
-                    </span>
                   </div>
                 )}
 

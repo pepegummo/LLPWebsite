@@ -1,5 +1,4 @@
 export { useAuthStore } from "./authStore";
-export { useGroupStore } from "./groupStore";
 export { useTaskStore } from "./taskStore";
 export { useEvaluationStore } from "./evaluationStore";
 export { useNotificationStore } from "./notificationStore";
@@ -10,3 +9,8 @@ export { useMeetingStore } from "./meetingStore";
 export { useRubricStore, DEFAULT_RUBRIC_WEIGHTS } from "./rubricStore";
 export { useTagStore } from "./tagStore";
 export { useTicketStore } from "./ticketStore";
+export { useWorkspaceStore } from "./workspaceStore";
+export { useProjectStore } from "./projectStore";
+export { useTeamStore } from "./teamStore";
+export { useProfileStore } from "./profileStore";
+export { useTemplateStore } from "./templateStore";

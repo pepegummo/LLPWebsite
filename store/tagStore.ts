@@ -13,8 +13,8 @@ interface TagState {
   tags: Tag[];
   addTag: (tag: Tag) => void;
   removeTag: (tagId: string) => void;
-  getTagsByGroup: (groupId: string) => Tag[];
-  getNextColor: (groupId: string) => string;
+  getTagsByTeam: (teamId: string) => Tag[];
+  getNextColor: (teamId: string) => string;
 }
 
 export const useTagStore = create<TagState>()(
@@ -24,13 +24,13 @@ export const useTagStore = create<TagState>()(
       addTag: (tag) => set((state) => ({ tags: [...state.tags, tag] })),
       removeTag: (tagId) =>
         set((state) => ({ tags: state.tags.filter((t) => t.id !== tagId) })),
-      getTagsByGroup: (groupId) =>
-        get().tags.filter((t) => t.groupId === groupId),
-      getNextColor: (groupId) => {
-        const groupTags = get().tags.filter((t) => t.groupId === groupId);
-        return TAG_COLORS[groupTags.length % TAG_COLORS.length];
+      getTagsByTeam: (teamId) =>
+        get().tags.filter((t) => t.teamId === teamId),
+      getNextColor: (teamId) => {
+        const teamTags = get().tags.filter((t) => t.teamId === teamId);
+        return TAG_COLORS[teamTags.length % TAG_COLORS.length];
       },
     }),
-    { name: "tag-storage" }
+    { name: "tag-storage-v2" }
   )
 );

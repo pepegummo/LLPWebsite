@@ -17,10 +17,8 @@ export default function RootPage() {
     if (!hydrated) return;
     if (!currentUser) {
       router.replace("/login");
-    } else if (currentUser.role === "student") {
-      router.replace("/student/dashboard");
     } else {
-      router.replace("/staff/dashboard");
+      router.replace("/student/dashboard");
     }
   }, [hydrated, currentUser, router]);
 

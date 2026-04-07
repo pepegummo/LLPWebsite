@@ -35,21 +35,21 @@ function statusLabel(status: TaskStatus) {
 }
 
 interface KanbanBoardProps {
-  groupId: string;
+  teamId: string;
 }
 
-export function KanbanBoard({ groupId }: KanbanBoardProps) {
+export function KanbanBoard({ teamId }: KanbanBoardProps) {
   const { tasks, addTask, moveTask, updateTask } = useTaskStore();
   const { currentUser } = useAuthStore();
   const { addLog } = useActivityStore();
-  const { getTagsByGroup } = useTagStore();
+  const { getTagsByTeam } = useTagStore();
   const [addOpen, setAddOpen] = useState(false);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [filterMine, setFilterMine] = useState(false);
   const [filterTagId, setFilterTagId] = useState<string | null>(null);
 
-  const groupTags = getTagsByGroup(groupId);
-  const groupTasks = tasks.filter((t) => t.groupId === groupId);
+  const groupTags = getTagsByTeam(teamId);
+  const groupTasks = tasks.filter((t) => t.teamId === teamId);
   const filteredByOwner = filterMine && currentUser
     ? groupTasks.filter((t) => t.assigneeIds.includes(currentUser.id))
     : groupTasks;
@@ -88,7 +88,7 @@ export function KanbanBoard({ groupId }: KanbanBoardProps) {
             id: Math.random().toString(36).substring(2, 11),
             taskId,
             taskTitle: task.title,
-            groupId,
+            teamId,
             userId: currentUser.id,
             action: `เปลี่ยนสถานะ: ${statusLabel(task.status)} → ${statusLabel(newStatus)}`,
             timestamp: new Date().toISOString(),
@@ -105,7 +105,7 @@ export function KanbanBoard({ groupId }: KanbanBoardProps) {
             id: Math.random().toString(36).substring(2, 11),
             taskId,
             taskTitle: task.title,
-            groupId,
+            teamId,
             userId: currentUser.id,
             action: `เปลี่ยนสถานะ: ${statusLabel(task.status)} → ${statusLabel(overTask.status)}`,
             timestamp: new Date().toISOString(),
@@ -221,7 +221,7 @@ export function KanbanBoard({ groupId }: KanbanBoardProps) {
                 id: Math.random().toString(36).substring(2, 11),
                 taskId: task.id,
                 taskTitle: task.title,
-                groupId,
+                teamId,
                 userId: currentUser.id,
                 action: "สร้างงานใหม่",
                 timestamp: new Date().toISOString(),
@@ -229,7 +229,7 @@ export function KanbanBoard({ groupId }: KanbanBoardProps) {
             }
             toast.success("เพิ่มงานแล้ว");
           }}
-          groupId={groupId}
+          teamId={teamId}
         />
       )}
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuthStore, useGroupStore, useEvaluationStore } from "@/store";
+import { useAuthStore, useTeamStore, useEvaluationStore } from "@/store";
 import { mockUsers } from "@/lib/mockData";
 import { EvaluationForm } from "@/components/student/EvaluationForm";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,18 +9,16 @@ import { Star } from "lucide-react";
 
 export default function StudentEvaluationPage() {
   const { currentUser } = useAuthStore();
-  const { groups } = useGroupStore();
+  const { teams } = useTeamStore();
   const { evaluations } = useEvaluationStore();
 
   if (!currentUser) return null;
 
-  const activeGroup = groups.find((g) => g.id === currentUser.activeGroupId);
-  const members = activeGroup
-    ? mockUsers.filter(
-        (u) =>
-          activeGroup.memberIds.includes(u.id) && u.id !== currentUser.id
-      )
+  const activeTeam = teams.find((t) => t.id === currentUser.activeTeamId);
+  const memberIds = activeTeam
+    ? activeTeam.members.map((m) => m.userId).filter((id) => id !== currentUser.id)
     : [];
+  const members = mockUsers.filter((u) => memberIds.includes(u.id));
 
   const evaluatedCount = members.filter((m) =>
     evaluations.some(
@@ -31,22 +29,22 @@ export default function StudentEvaluationPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">ประเมินเพื่อนร่วมกลุ่ม</h1>
-        {activeGroup && (
-          <p className="text-muted-foreground">กลุ่ม: {activeGroup.name}</p>
+        <h1 className="text-2xl font-bold">ประเมินเพื่อนร่วมทีม</h1>
+        {activeTeam && (
+          <p className="text-muted-foreground">ทีม: {activeTeam.name}</p>
         )}
       </div>
 
-      {!activeGroup ? (
+      {!activeTeam ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            ไม่มีกลุ่มที่ใช้งานอยู่
+            ไม่มีทีมที่ใช้งานอยู่
           </CardContent>
         </Card>
       ) : members.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            ไม่มีสมาชิกในกลุ่มที่สามารถประเมินได้
+            ไม่มีสมาชิกในทีมที่สามารถประเมินได้
           </CardContent>
         </Card>
       ) : (
@@ -68,7 +66,7 @@ export default function StudentEvaluationPage() {
               <EvaluationForm
                 key={member.id}
                 evaluatee={member}
-                groupId={activeGroup.id}
+                teamId={activeTeam.id}
               />
             ))}
           </div>

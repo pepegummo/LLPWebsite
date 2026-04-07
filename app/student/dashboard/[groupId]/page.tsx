@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import Link from "next/link";
-import { useAuthStore, useTaskStore, useGroupStore, useActivityStore } from "@/store";
+import { useAuthStore, useTaskStore, useTeamStore, useActivityStore } from "@/store";
 import { WorkloadBar } from "@/components/student/WorkloadBar";
 import { mockUsers } from "@/lib/mockData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,21 +31,21 @@ function formatDate(iso: string): string {
   return `${dd}/${mm}/${yy} ${hours}:${mins} ${ampm}`;
 }
 
-export default function GroupDashboardPage({
+export default function TeamDashboardPage({
   params,
 }: {
   params: Promise<{ groupId: string }>;
 }) {
-  const { groupId } = use(params);
+  const { groupId: teamId } = use(params);
   const { currentUser } = useAuthStore();
   const { tasks } = useTaskStore();
-  const { groups } = useGroupStore();
-  const { getLogsByGroup } = useActivityStore();
+  const { teams } = useTeamStore();
+  const { getLogsByTeam } = useActivityStore();
 
   if (!currentUser) return null;
 
-  const group = groups.find((g) => g.id === groupId);
-  if (!group) {
+  const team = teams.find((t) => t.id === teamId);
+  if (!team) {
     return (
       <div className="space-y-4">
         <Link href="/student/dashboard">
@@ -53,29 +53,22 @@ export default function GroupDashboardPage({
             <ArrowLeft className="w-4 h-4 mr-1" /> กลับ
           </Button>
         </Link>
-        <p className="text-muted-foreground">ไม่พบกลุ่มนี้</p>
+        <p className="text-muted-foreground">ไม่พบทีมนี้</p>
       </div>
     );
   }
 
-  const groupTasks = tasks.filter((t) => t.groupId === groupId);
-  const totalTasks = groupTasks.length;
-  const doneTasks = groupTasks.filter((t) => t.status === "done").length;
-  const inProgressTasks = groupTasks.filter(
-    (t) => t.status === "in_progress"
-  ).length;
-  const todoTasks = groupTasks.filter((t) => t.status === "todo").length;
-  const overdueTasks = groupTasks.filter(
-    (t) =>
-      t.dueDate && t.status !== "done" && new Date(t.dueDate) < new Date()
+  const memberIds = team.members.map((m) => m.userId);
+  const teamTasks = tasks.filter((t) => t.teamId === teamId);
+  const totalTasks = teamTasks.length;
+  const doneTasks = teamTasks.filter((t) => t.status === "done").length;
+  const inProgressTasks = teamTasks.filter((t) => t.status === "in_progress").length;
+  const overdueTasks = teamTasks.filter(
+    (t) => t.dueDate && t.status !== "done" && new Date(t.dueDate) < new Date()
   ).length;
 
-  const members = mockUsers.filter((u) => group.memberIds.includes(u.id));
-  const activityLogs = getLogsByGroup(groupId)
-    .sort(
-      (a, b) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    )
+  const activityLogs = getLogsByTeam(teamId)
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     .slice(0, 20);
 
   return (
@@ -87,10 +80,8 @@ export default function GroupDashboardPage({
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold">{group.name}</h1>
-          <p className="text-muted-foreground text-sm">
-            {group.memberIds.length} สมาชิก
-          </p>
+          <h1 className="text-2xl font-bold">{team.name}</h1>
+          <p className="text-muted-foreground text-sm">{team.members.length} สมาชิก</p>
         </div>
       </div>
 
@@ -139,7 +130,7 @@ export default function GroupDashboardPage({
         <h2 className="text-lg font-semibold">ภาระงานสมาชิก</h2>
         <Card>
           <CardContent className="p-4">
-            <WorkloadBar tasks={groupTasks} memberIds={group.memberIds} />
+            <WorkloadBar tasks={teamTasks} memberIds={memberIds} teamId={teamId} />
           </CardContent>
         </Card>
       </div>
@@ -147,15 +138,13 @@ export default function GroupDashboardPage({
       {/* Task list */}
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">รายการงาน</h2>
-        {groupTasks.length === 0 ? (
+        {teamTasks.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              ยังไม่มีงาน
-            </CardContent>
+            <CardContent className="py-8 text-center text-muted-foreground">ยังไม่มีงาน</CardContent>
           </Card>
         ) : (
           <div className="space-y-2">
-            {groupTasks.map((task) => {
+            {teamTasks.map((task) => {
               const assignees = task.assigneeIds
                 .map((id) => mockUsers.find((u) => u.id === id))
                 .filter(Boolean);
@@ -165,10 +154,7 @@ export default function GroupDashboardPage({
                 new Date(task.dueDate) < new Date();
 
               return (
-                <Card
-                  key={task.id}
-                  className={cn(isOverdue && "border-destructive/40")}
-                >
+                <Card key={task.id} className={cn(isOverdue && "border-destructive/40")}>
                   <CardContent className="p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
@@ -180,41 +166,24 @@ export default function GroupDashboardPage({
                         )}
                         <div className="flex flex-wrap gap-1.5 mt-1.5 text-xs text-muted-foreground">
                           {assignees.map((a) => (
-                            <span
-                              key={a!.id}
-                              className="flex items-center gap-0.5"
-                            >
+                            <span key={a!.id} className="flex items-center gap-0.5">
                               <User className="w-3 h-3" />
                               {a!.name}
                             </span>
                           ))}
                           {task.dueDate && (
-                            <span
-                              className={cn(isOverdue && "text-destructive")}
-                            >
+                            <span className={cn(isOverdue && "text-destructive")}>
                               ครบ {new Date(task.dueDate).toLocaleDateString("th-TH")}
                             </span>
                           )}
-                          {task.manHours != null && (
-                            <span>{task.manHours} ชม.</span>
-                          )}
+                          {task.manHours != null && <span>{task.manHours} ชม.</span>}
                         </div>
                       </div>
                       <Badge
-                        variant={
-                          task.status === "done"
-                            ? "default"
-                            : task.status === "in_progress"
-                            ? "secondary"
-                            : "outline"
-                        }
+                        variant={task.status === "done" ? "default" : task.status === "in_progress" ? "secondary" : "outline"}
                         className="text-xs shrink-0"
                       >
-                        {task.status === "done"
-                          ? "เสร็จสิ้น"
-                          : task.status === "in_progress"
-                          ? "กำลังทำ"
-                          : "รอดำเนินการ"}
+                        {task.status === "done" ? "เสร็จสิ้น" : task.status === "in_progress" ? "กำลังทำ" : "รอดำเนินการ"}
                       </Badge>
                     </div>
                   </CardContent>
@@ -233,9 +202,7 @@ export default function GroupDashboardPage({
         </h2>
         {activityLogs.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              ยังไม่มีประวัติ
-            </CardContent>
+            <CardContent className="py-8 text-center text-muted-foreground">ยังไม่มีประวัติ</CardContent>
           </Card>
         ) : (
           <div className="space-y-1.5">
