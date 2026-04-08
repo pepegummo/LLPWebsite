@@ -258,7 +258,7 @@ export function TaskCard({ task }: TaskCardProps) {
                     {task.manHours} ชม.
                   </span>
                 )}
-                {task.dueDate && (
+                {(task.startDate || task.dueDate) && (
                   <span
                     className={cn(
                       "flex items-center gap-1",
@@ -266,7 +266,9 @@ export function TaskCard({ task }: TaskCardProps) {
                     )}
                   >
                     <Calendar className="w-3 h-3" />
-                    {new Date(task.dueDate).toLocaleDateString("th-TH")}
+                    {task.startDate
+                      ? `${new Date(task.startDate).toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit" })} – ${task.dueDate ? new Date(task.dueDate).toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit" }) : "?"}`
+                      : new Date(task.dueDate!).toLocaleDateString("th-TH")}
                   </span>
                 )}
               </div>

@@ -7,7 +7,9 @@ import {
   useProjectStore,
   useTeamStore,
 } from "@/store";
+import { mockUsers } from "@/lib/mockData";
 import { Workspace, Project, Team, TeamRole } from "@/types";
+import { WORKSPACE_ROLE_COLORS, WORKSPACE_ROLE_LABELS } from "@/lib/badge-constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +33,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Layers,
   FolderOpen,
   Users,
@@ -38,8 +47,12 @@ import {
   Trash2,
   ChevronRight,
   Crown,
+  Shield,
+  UserPlus,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 function generateId() {
   return Math.random().toString(36).substring(2, 11);
@@ -47,7 +60,7 @@ function generateId() {
 
 export default function WorkspacePage() {
   const { currentUser, updateCurrentUser } = useAuthStore();
-  const { workspaces, addWorkspace, deleteWorkspace } = useWorkspaceStore();
+  const { workspaces, addWorkspace, deleteWorkspace, getWorkspaceRole, getWorkspacesByUser, addAdmin, removeAdmin } = useWorkspaceStore();
   const { projects, addProject, deleteProject, getProjectsByWorkspace } = useProjectStore();
   const { teams, addTeam, deleteTeam, getUserRole, getTeamsByUser } = useTeamStore();
 
@@ -56,6 +69,8 @@ export default function WorkspacePage() {
   const [newProjOpen, setNewProjOpen] = useState(false);
   const [newTeamOpen, setNewTeamOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ type: "workspace" | "project" | "team"; id: string; name: string } | null>(null);
+  const [manageAdminWsId, setManageAdminWsId] = useState<string | null>(null);
+  const [selectedAdminUserId, setSelectedAdminUserId] = useState("");
 
   // Form state
   const [wsName, setWsName] = useState("");
@@ -67,7 +82,8 @@ export default function WorkspacePage() {
 
   if (!currentUser) return null;
 
-  const myWorkspaces = workspaces.filter((w) => w.ownerId === currentUser.id);
+  // Workspaces ที่ user เป็น owner หรือ admin
+  const managedWorkspaces = getWorkspacesByUser(currentUser.id);
   const userTeams = getTeamsByUser(currentUser.id);
 
   const handleCreateWorkspace = () => {
@@ -76,6 +92,7 @@ export default function WorkspacePage() {
       id: generateId(),
       name: wsName.trim(),
       ownerId: currentUser.id,
+      adminIds: [],
       createdAt: new Date().toISOString(),
     };
     addWorkspace(ws);
@@ -119,7 +136,6 @@ export default function WorkspacePage() {
     };
     addTeam(team);
 
-    // Set as active team if no active team
     if (!currentUser.activeTeamId) {
       updateCurrentUser({ ...currentUser, activeTeamId: team.id });
     }
@@ -140,7 +156,6 @@ export default function WorkspacePage() {
       toast.success("ลบ Project แล้ว");
     } else {
       deleteTeam(deleteTarget.id);
-      // If deleted team was active, clear it
       if (currentUser.activeTeamId === deleteTarget.id) {
         const remaining = userTeams.filter((t) => t.id !== deleteTarget.id);
         updateCurrentUser({ ...currentUser, activeTeamId: remaining[0]?.id ?? null });
@@ -150,12 +165,36 @@ export default function WorkspacePage() {
     setDeleteTarget(null);
   };
 
-  // All projects visible to user (in their workspaces + projects of teams they're in)
+  const handleAddAdmin = () => {
+    if (!manageAdminWsId || !selectedAdminUserId) return;
+    const ws = workspaces.find((w) => w.id === manageAdminWsId);
+    if (!ws) return;
+    if (ws.ownerId === selectedAdminUserId) {
+      toast.error("ผู้ใช้นี้เป็น Owner อยู่แล้ว");
+      return;
+    }
+    addAdmin(manageAdminWsId, selectedAdminUserId);
+    setSelectedAdminUserId("");
+    toast.success("แต่งตั้ง Workspace Admin แล้ว");
+  };
+
+  const handleRemoveAdmin = (wsId: string, userId: string) => {
+    removeAdmin(wsId, userId);
+    toast.success("ถอด Workspace Admin แล้ว");
+  };
+
+  // Projects visible to user (from managed workspaces + teams they're in)
   const visibleProjectIds = new Set([
-    ...myWorkspaces.flatMap((ws) => getProjectsByWorkspace(ws.id).map((p) => p.id)),
+    ...managedWorkspaces.flatMap((ws) => getProjectsByWorkspace(ws.id).map((p) => p.id)),
     ...userTeams.map((t) => t.projectId),
   ]);
   const visibleProjects = projects.filter((p) => visibleProjectIds.has(p.id));
+
+  // Workspace being managed for admin
+  const manageAdminWs = workspaces.find((w) => w.id === manageAdminWsId);
+  const adminCandidates = mockUsers.filter(
+    (u) => u.id !== currentUser.id && u.id !== manageAdminWs?.ownerId && !(manageAdminWs?.adminIds ?? []).includes(u.id)
+  );
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -175,7 +214,7 @@ export default function WorkspacePage() {
           <PlusCircle className="w-4 h-4 mr-1.5" />
           Workspace ใหม่
         </Button>
-        <Button size="sm" variant="outline" onClick={() => { setProjWorkspaceId(myWorkspaces[0]?.id ?? ""); setNewProjOpen(true); }}>
+        <Button size="sm" variant="outline" onClick={() => { setProjWorkspaceId(managedWorkspaces[0]?.id ?? ""); setNewProjOpen(true); }}>
           <PlusCircle className="w-4 h-4 mr-1.5" />
           Project ใหม่
         </Button>
@@ -185,7 +224,7 @@ export default function WorkspacePage() {
         </Button>
       </div>
 
-      {/* ทีมของฉัน — แสดงทุกทีมที่เป็นสมาชิก */}
+      {/* ทีมของฉัน */}
       {userTeams.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
@@ -238,7 +277,7 @@ export default function WorkspacePage() {
 
       {/* Workspaces */}
       <div className="space-y-4">
-        {myWorkspaces.length === 0 && userTeams.length === 0 ? (
+        {managedWorkspaces.length === 0 && userTeams.length === 0 ? (
           <Card>
             <CardContent className="py-16 text-center text-muted-foreground">
               <Layers className="w-12 h-12 mx-auto mb-3 opacity-20" />
@@ -250,9 +289,14 @@ export default function WorkspacePage() {
               </Button>
             </CardContent>
           </Card>
-        ) : myWorkspaces.length > 0 ? (
-          myWorkspaces.map((ws) => {
+        ) : (
+          managedWorkspaces.map((ws) => {
+            const myWsRole = getWorkspaceRole(ws.id, currentUser.id)!;
+            const isOwner = myWsRole === "owner";
+            const canManageProject = isOwner || myWsRole === "admin";
             const wsProjects = getProjectsByWorkspace(ws.id);
+            const adminUsers = mockUsers.filter((u) => (ws.adminIds ?? []).includes(u.id));
+
             return (
               <Card key={ws.id}>
                 <CardHeader className="pb-2">
@@ -260,18 +304,59 @@ export default function WorkspacePage() {
                     <CardTitle className="text-base flex items-center gap-2">
                       <Layers className="w-4 h-4 text-primary" />
                       {ws.name}
-                      <Badge variant="secondary" className="text-xs">เจ้าของ</Badge>
+                      <Badge className={cn("text-xs border-0", WORKSPACE_ROLE_COLORS[myWsRole])}>
+                        {WORKSPACE_ROLE_LABELS[myWsRole]}
+                      </Badge>
                     </CardTitle>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                      onClick={() => setDeleteTarget({ type: "workspace", id: ws.id, name: ws.name })}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      {/* แต่งตั้ง Admin — Owner only */}
+                      {isOwner && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs text-muted-foreground hover:text-primary"
+                          onClick={() => { setManageAdminWsId(ws.id); setSelectedAdminUserId(""); }}
+                        >
+                          <Shield className="w-3.5 h-3.5 mr-1" />
+                          จัดการ Admin
+                        </Button>
+                      )}
+                      {/* ลบ Workspace — Owner only */}
+                      {isOwner && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={() => setDeleteTarget({ type: "workspace", id: ws.id, name: ws.name })}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Admin list */}
+                  {adminUsers.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                      <span className="text-xs text-muted-foreground">Admins:</span>
+                      {adminUsers.map((u) => (
+                        <Badge key={u.id} variant="outline" className="text-xs gap-1">
+                          <Shield className="w-2.5 h-2.5 text-violet-500" />
+                          {u.name}
+                          {isOwner && (
+                            <button
+                              className="ml-0.5 hover:text-destructive"
+                              onClick={() => handleRemoveAdmin(ws.id, u.id)}
+                            >
+                              <X className="w-2.5 h-2.5" />
+                            </button>
+                          )}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </CardHeader>
+
                 <CardContent className="space-y-2">
                   {wsProjects.length === 0 ? (
                     <p className="text-sm text-muted-foreground">ยังไม่มี Project</p>
@@ -288,14 +373,17 @@ export default function WorkspacePage() {
                                 <span className="text-xs text-muted-foreground">— {proj.description}</span>
                               )}
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                              onClick={() => setDeleteTarget({ type: "project", id: proj.id, name: proj.name })}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
+                            {/* ลบ Project — Owner หรือ Admin */}
+                            {canManageProject && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                onClick={() => setDeleteTarget({ type: "project", id: proj.id, name: proj.name })}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            )}
                           </div>
 
                           {/* Teams in project */}
@@ -341,21 +429,89 @@ export default function WorkspacePage() {
                     })
                   )}
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full h-7 text-xs text-muted-foreground"
-                    onClick={() => { setProjWorkspaceId(ws.id); setNewProjOpen(true); }}
-                  >
-                    <PlusCircle className="w-3 h-3 mr-1" />
-                    เพิ่ม Project
-                  </Button>
+                  {/* เพิ่ม Project — Owner หรือ Admin */}
+                  {canManageProject && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full h-7 text-xs text-muted-foreground"
+                      onClick={() => { setProjWorkspaceId(ws.id); setNewProjOpen(true); }}
+                    >
+                      <PlusCircle className="w-3 h-3 mr-1" />
+                      เพิ่ม Project
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             );
           })
-        ) : null}
+        )}
       </div>
+
+      {/* Manage Admin Dialog */}
+      <Dialog open={!!manageAdminWsId} onOpenChange={(v) => { if (!v) setManageAdminWsId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-violet-500" />
+              จัดการ Workspace Admin — {manageAdminWs?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Current admins */}
+            {manageAdminWs && (manageAdminWs.adminIds ?? []).length > 0 ? (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Admin ปัจจุบัน</Label>
+                {mockUsers.filter((u) => (manageAdminWs.adminIds ?? []).includes(u.id)).map((u) => (
+                  <div key={u.id} className="flex items-center justify-between border border-border rounded-md px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-3.5 h-3.5 text-violet-500" />
+                      <span className="text-sm">{u.name}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 hover:text-destructive"
+                      onClick={() => handleRemoveAdmin(manageAdminWsId!, u.id)}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">ยังไม่มี Admin</p>
+            )}
+
+            {/* Add admin */}
+            <div className="space-y-1.5 border-t border-border pt-3">
+              <Label>แต่งตั้ง Admin ใหม่</Label>
+              <div className="flex gap-2">
+                <Select value={selectedAdminUserId} onValueChange={setSelectedAdminUserId}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="เลือกผู้ใช้..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {adminCandidates.length === 0 ? (
+                      <SelectItem value="_none" disabled>ไม่มีผู้ใช้ที่สามารถเพิ่มได้</SelectItem>
+                    ) : (
+                      adminCandidates.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleAddAdmin} disabled={!selectedAdminUserId || selectedAdminUserId === "_none"}>
+                  <UserPlus className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setManageAdminWsId(null)}>ปิด</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Workspace Dialog */}
       <Dialog open={newWsOpen} onOpenChange={(v) => { if (!v) { setNewWsOpen(false); setWsName(""); } }}>
@@ -391,7 +547,7 @@ export default function WorkspacePage() {
                 onChange={(e) => setProjWorkspaceId(e.target.value)}
               >
                 <option value="">เลือก Workspace...</option>
-                {myWorkspaces.map((ws) => (
+                {managedWorkspaces.map((ws) => (
                   <option key={ws.id} value={ws.id}>{ws.name}</option>
                 ))}
               </select>

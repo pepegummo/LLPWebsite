@@ -72,6 +72,7 @@ export function TaskForm({
   const [assigneeIds, setAssigneeIds] = useState<string[]>(
     initialTask?.assigneeIds ?? []
   );
+  const [startDate, setStartDate] = useState(initialTask?.startDate ?? "");
   const [dueDate, setDueDate] = useState(initialTask?.dueDate ?? "");
   const [manHours, setManHours] = useState<string>(
     initialTask?.manHours?.toString() ?? ""
@@ -168,6 +169,11 @@ export function TaskForm({
       return;
     }
 
+    if (subTasks.length === 0 && !manHours) {
+      toast.error("กรุณากรอก Man Hours");
+      return;
+    }
+
     const prevAssigneeIds = initialTask?.assigneeIds ?? [];
     const newlyAssigned = assigneeIds.filter(
       (id) => !prevAssigneeIds.includes(id)
@@ -182,6 +188,7 @@ export function TaskForm({
       status,
       assigneeIds,
       attachments,
+      startDate: startDate || null,
       dueDate: dueDate || null,
       createdAt: initialTask?.createdAt ?? new Date().toISOString(),
       manHours:
@@ -215,6 +222,7 @@ export function TaskForm({
       setDescription("");
       setStatus("todo");
       setAssigneeIds([]);
+      setStartDate("");
       setDueDate("");
       setManHours("");
       setAttachments([]);
@@ -279,7 +287,7 @@ export function TaskForm({
               </Select>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="man-hours">Man Hours</Label>
+              <Label htmlFor="man-hours">Man Hours *</Label>
               {subTasks.length > 0 ? (
                 <div className="flex items-center gap-1.5 h-9 px-3 bg-muted rounded-md text-sm text-muted-foreground">
                   <Clock className="w-3.5 h-3.5 shrink-0" />
@@ -294,6 +302,7 @@ export function TaskForm({
                   type="number"
                   min="0"
                   step="0.5"
+                  required
                   value={manHours}
                   onChange={(e) => setManHours(e.target.value)}
                   placeholder="จำนวนชั่วโมง"
@@ -302,15 +311,26 @@ export function TaskForm({
             </div>
           </div>
 
-          {/* Due Date */}
-          <div className="space-y-1">
-            <Label htmlFor="due-date">วันครบกำหนด</Label>
-            <Input
-              id="due-date"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
+          {/* Start Date / Due Date */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="start-date">วันเริ่มต้น</Label>
+              <Input
+                id="start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="due-date">วันครบกำหนด</Label>
+              <Input
+                id="due-date"
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
+            </div>
           </div>
 
           {/* Tags */}
@@ -418,10 +438,25 @@ export function TaskForm({
                   </Button>
                 </div>
 
-                {/* Sub-task assignees (expandable) */}
+                {/* Sub-task assignees + dates (expandable) */}
                 {expandedSubTask === st.id && (
-                  <div className="px-3 py-2 space-y-1 bg-background">
-                    <p className="text-xs text-muted-foreground mb-1">
+                  <div className="px-3 py-2 space-y-2 bg-background">
+                    <div className="space-y-1">
+                      <Label className="text-xs">วันเริ่มต้น</Label>
+                      <Input
+                        type="date"
+                        className="h-7 text-xs"
+                        value={st.startDate ?? ""}
+                        onChange={(e) =>
+                          setSubTasks((prev) =>
+                            prev.map((s) =>
+                              s.id === st.id ? { ...s, startDate: e.target.value || null } : s
+                            )
+                          )
+                        }
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
                       ผู้รับผิดชอบ sub-task:
                     </p>
                     {members.map((m) => {

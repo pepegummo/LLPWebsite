@@ -47,7 +47,7 @@ export default function LoginPage() {
     });
 
     toast.success(`ยินดีต้อนรับ ${user.name}!`);
-    router.replace("/student/dashboard");
+    router.replace("/dashboard");
   };
 
   const selectedUser = mockUsers.find((u) => u.id === selectedUserId);

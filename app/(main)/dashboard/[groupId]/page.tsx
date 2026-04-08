@@ -3,7 +3,7 @@
 import { use } from "react";
 import Link from "next/link";
 import { useAuthStore, useTaskStore, useTeamStore, useActivityStore } from "@/store";
-import { WorkloadBar } from "@/components/student/WorkloadBar";
+import { WorkloadBar } from "@/components/WorkloadBar";
 import { mockUsers } from "@/lib/mockData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,7 +48,7 @@ export default function TeamDashboardPage({
   if (!team) {
     return (
       <div className="space-y-4">
-        <Link href="/student/dashboard">
+        <Link href="/dashboard">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="w-4 h-4 mr-1" /> กลับ
           </Button>
@@ -74,7 +74,7 @@ export default function TeamDashboardPage({
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Link href="/student/dashboard">
+        <Link href="/dashboard">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="w-4 h-4 mr-1" /> กลับ
           </Button>

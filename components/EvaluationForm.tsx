@@ -243,11 +243,11 @@ export function EvaluationForm({ evaluatee, teamId }: EvaluationFormProps) {
           )}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-4">
         {/* Criteria */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           {CRITERIA_LABELS.map(({ key, label }) => (
-            <div key={key} className="space-y-0.5">
+            <div key={key} className="space-y-1">
               <div className="flex items-center justify-between">
                 <Label className="text-xs">{label}</Label>
                 <span className="text-xs text-muted-foreground">
@@ -264,7 +264,7 @@ export function EvaluationForm({ evaluatee, teamId }: EvaluationFormProps) {
 
         {/* Preview score */}
         {previewScore !== null && (
-          <div className="flex items-center gap-2 py-1.5 px-2 bg-muted rounded-md">
+          <div className="flex items-center gap-2 py-2 px-3 bg-muted rounded-md">
             <span className="text-xs text-muted-foreground">คะแนนรวม (weighted):</span>
             <div className="flex gap-0.5">
               {[1, 2, 3, 4, 5].map((s) => (
@@ -284,13 +284,13 @@ export function EvaluationForm({ evaluatee, teamId }: EvaluationFormProps) {
         )}
 
         {/* Comment */}
-        <div className="space-y-1">
-          <Label className="text-xs">ความคิดเห็น</Label>
+        <div className="space-y-1.5 border-t border-border pt-3">
+          <Label className="text-xs">ความคิดเห็น *</Label>
           <Textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder="เขียนความคิดเห็น..."
-            rows={2}
+            rows={3}
             className="text-sm"
           />
         </div>

@@ -32,6 +32,7 @@ interface NavItem {
   href: string;
   icon: React.ReactNode;
   leaderOnly?: boolean;
+  requiresTeam?: boolean;
 }
 
 interface NavSection {
@@ -43,39 +44,39 @@ const navSections: NavSection[] = [
   {
     title: "ภาพรวม",
     items: [
-      { label: "แดชบอร์ด", href: "/student/dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
-      { label: "งาน", href: "/student/tasks", icon: <KanbanSquare className="w-4 h-4" /> },
-      { label: "ปฏิทิน", href: "/student/calendar", icon: <Calendar className="w-4 h-4" /> },
+      { label: "แดชบอร์ด", href: "/dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
+      { label: "งาน", href: "/tasks", icon: <KanbanSquare className="w-4 h-4" />, requiresTeam: true },
+      { label: "ปฏิทิน", href: "/calendar", icon: <Calendar className="w-4 h-4" />, requiresTeam: true },
     ],
   },
   {
     title: "ทีมงาน",
     items: [
-      { label: "ประชุม", href: "/student/meeting", icon: <Video className="w-4 h-4" /> },
-      { label: "แชท", href: "/student/chat", icon: <MessageCircle className="w-4 h-4" /> },
-      { label: "ทีม", href: "/student/team", icon: <Users className="w-4 h-4" /> },
-      { label: "ลิงก์", href: "/student/links", icon: <Paperclip className="w-4 h-4" /> },
+      { label: "ประชุม", href: "/meeting", icon: <Video className="w-4 h-4" />, requiresTeam: true },
+      { label: "แชท", href: "/chat", icon: <MessageCircle className="w-4 h-4" />, requiresTeam: true },
+      { label: "ทีม", href: "/team", icon: <Users className="w-4 h-4" />, requiresTeam: true },
+      { label: "ลิงก์", href: "/links", icon: <Paperclip className="w-4 h-4" />, requiresTeam: true },
     ],
   },
   {
     title: "อื่นๆ",
     items: [
-      { label: "ประเมินผล", href: "/student/evaluation", icon: <ClipboardCheck className="w-4 h-4" /> },
-      { label: "แจ้งปัญหา", href: "/student/ticket", icon: <LifeBuoy className="w-4 h-4" /> },
+      { label: "ประเมินผล", href: "/evaluation", icon: <ClipboardCheck className="w-4 h-4" />, requiresTeam: true },
+      { label: "แจ้งปัญหา", href: "/ticket", icon: <LifeBuoy className="w-4 h-4" />, requiresTeam: true },
     ],
   },
   {
     title: "จัดการ",
     items: [
-      { label: "Workspace", href: "/student/workspace", icon: <Layers className="w-4 h-4" /> },
-      { label: "Template Library", href: "/student/templates", icon: <Library className="w-4 h-4" />, leaderOnly: true },
-      { label: "ตั้งค่าทีม", href: "/student/setup", icon: <Shield className="w-4 h-4" />, leaderOnly: true },
+      { label: "Workspace", href: "/workspace", icon: <Layers className="w-4 h-4" /> },
+      { label: "Template Library", href: "/templates", icon: <Library className="w-4 h-4" />, leaderOnly: true, requiresTeam: true },
+      { label: "ตั้งค่าทีม", href: "/setup", icon: <Shield className="w-4 h-4" />, leaderOnly: true, requiresTeam: true },
     ],
   },
   {
     title: "บัญชี",
     items: [
-      { label: "ข้อมูลส่วนตัว", href: "/student/profile", icon: <UserCircle className="w-4 h-4" /> },
+      { label: "ข้อมูลส่วนตัว", href: "/profile", icon: <UserCircle className="w-4 h-4" /> },
     ],
   },
 ];
@@ -106,11 +107,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
   const isActive = (href: string) => {
     if (
-      href === "/student/dashboard" ||
-      href === "/student/workspace" ||
-      href === "/student/setup" ||
-      href === "/student/profile" ||
-      href === "/student/templates"
+      href === "/dashboard" ||
+      href === "/workspace" ||
+      href === "/setup" ||
+      href === "/profile" ||
+      href === "/templates"
     ) {
       return pathname === href;
     }
@@ -182,7 +183,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         <nav className="flex-1 py-2 overflow-y-auto">
           {navSections.map((section, si) => {
             const visibleItems = section.items.filter(
-              (item) => !item.leaderOnly || isLeaderOrAssistant
+              (item) =>
+                (!item.leaderOnly || isLeaderOrAssistant) &&
+                (!item.requiresTeam || !!activeTeamId)
             );
             if (visibleItems.length === 0) return null;
             return (

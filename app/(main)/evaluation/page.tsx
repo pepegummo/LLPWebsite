@@ -2,7 +2,7 @@
 
 import { useAuthStore, useTeamStore, useEvaluationStore } from "@/store";
 import { mockUsers } from "@/lib/mockData";
-import { EvaluationForm } from "@/components/student/EvaluationForm";
+import { EvaluationForm } from "@/components/EvaluationForm";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Star } from "lucide-react";

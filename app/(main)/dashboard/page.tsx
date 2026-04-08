@@ -180,7 +180,7 @@ export default function StudentDashboardPage() {
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground">
               คุณยังไม่ได้เป็นสมาชิกทีมใด —{" "}
-              <Link href="/student/workspace" className="text-primary hover:underline">
+              <Link href="/workspace" className="text-primary hover:underline">
                 สร้างทีมใหม่
               </Link>
             </CardContent>
@@ -230,7 +230,7 @@ export default function StudentDashboardPage() {
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <Link href={`/student/dashboard/${team.id}`}>
+                    <Link href={`/dashboard/${team.id}`}>
                       <Button
                         variant="ghost"
                         size="sm"

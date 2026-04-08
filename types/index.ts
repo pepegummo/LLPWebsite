@@ -1,5 +1,6 @@
 export type TaskStatus = "todo" | "in_progress" | "done";
 export type TeamRole = "team_leader" | "assistant_leader" | "member";
+export type WorkspaceRole = "owner" | "admin" | "member";
 
 export interface User {
   id: string;
@@ -16,7 +17,8 @@ export interface TeamMember {
 export interface Workspace {
   id: string;
   name: string;
-  ownerId: string;
+  ownerId: string;   // มีได้คนเดียว (ผู้สร้าง)
+  adminIds: string[]; // Workspace Admin มีได้หลายคน
   createdAt: string;
 }
 
@@ -50,6 +52,7 @@ export interface SubTask {
   completed: boolean;
   manHours?: number;
   assigneeIds?: string[];
+  startDate?: string | null;
 }
 
 export interface Task {
@@ -60,6 +63,7 @@ export interface Task {
   status: TaskStatus;
   assigneeIds: string[];
   attachments: Attachment[];
+  startDate?: string | null;
   dueDate: string | null;
   createdAt: string;
   manHours: number | null;

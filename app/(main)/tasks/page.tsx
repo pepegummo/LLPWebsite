@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuthStore, useTeamStore } from "@/store";
-import { KanbanBoard } from "@/components/student/KanbanBoard";
+import { KanbanBoard } from "@/components/KanbanBoard";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function StudentTasksPage() {

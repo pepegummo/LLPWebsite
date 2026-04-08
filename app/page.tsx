@@ -18,7 +18,7 @@ export default function RootPage() {
     if (!currentUser) {
       router.replace("/login");
     } else {
-      router.replace("/student/dashboard");
+      router.replace("/dashboard");
     }
   }, [hydrated, currentUser, router]);
 

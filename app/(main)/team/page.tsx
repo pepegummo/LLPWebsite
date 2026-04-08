@@ -5,7 +5,7 @@ import { useAuthStore, useTeamStore, useTaskStore, useNotificationStore } from "
 import { mockUsers } from "@/lib/mockData";
 import { useDisplayName } from "@/lib/useDisplayName";
 import { TeamRole } from "@/types";
-import { WorkloadBar } from "@/components/student/WorkloadBar";
+import { WorkloadBar } from "@/components/WorkloadBar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,22 +28,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Users, User, Shuffle, UserPlus, Shield, Trash2, Crown } from "lucide-react";
 import { toast } from "sonner";
+import { ROLE_COLORS, ROLE_LABELS } from "@/lib/badge-constants";
 
 function generateId() {
   return Math.random().toString(36).substring(2, 11);
 }
-
-const ROLE_LABELS: Record<TeamRole, string> = {
-  team_leader: "Team Leader",
-  assistant_leader: "Assistant Leader",
-  member: "Member",
-};
-
-const ROLE_COLORS: Record<TeamRole, string> = {
-  team_leader: "bg-amber-100 text-amber-700",
-  assistant_leader: "bg-blue-100 text-blue-700",
-  member: "bg-slate-100 text-slate-600",
-};
 
 export default function StudentTeamPage() {
   const { currentUser, updateCurrentUser } = useAuthStore();

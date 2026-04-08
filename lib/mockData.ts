@@ -13,6 +13,7 @@ export const mockWorkspaces: Workspace[] = [
     id: "ws1",
     name: "CS101 - ระบบจัดการโปรเจกต์",
     ownerId: "user1",
+    adminIds: ["user2"],
     createdAt: "2026-03-01T00:00:00Z",
   },
 ];

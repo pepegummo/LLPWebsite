@@ -143,13 +143,13 @@ export default function StudentTicketPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">สร้าง Ticket ใหม่ ({activeTeam?.name})</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
                   <Label htmlFor="ticket-title">หัวข้อ *</Label>
                   <Input id="ticket-title" placeholder="หัวข้อ..." value={title} onChange={(e) => setTitle(e.target.value)} />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <Label>ประเภท</Label>
                   <Select value={type} onValueChange={(v) => setType(v as TicketType)}>
                     <SelectTrigger>
@@ -163,11 +163,11 @@ export default function StudentTicketPage() {
                   </Select>
                 </div>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <Label htmlFor="ticket-desc">รายละเอียด *</Label>
-                <Textarea id="ticket-desc" placeholder="อธิบายรายละเอียด..." value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
+                <Textarea id="ticket-desc" placeholder="อธิบายรายละเอียด..." value={description} onChange={(e) => setDescription(e.target.value)} rows={5} />
               </div>
-              <div className="flex justify-end">
+              <div className="border-t border-border pt-3 flex justify-end">
                 <Button onClick={handleSubmit}>
                   <Send className="w-4 h-4 mr-2" />
                   ส่ง Ticket
