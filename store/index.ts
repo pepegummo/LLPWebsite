@@ -13,4 +13,3 @@ export { useWorkspaceStore } from "./workspaceStore";
 export { useProjectStore } from "./projectStore";
 export { useTeamStore } from "./teamStore";
 export { useProfileStore } from "./profileStore";
-export { useTemplateStore } from "./templateStore";

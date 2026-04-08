@@ -1,4 +1,4 @@
-import { User, Workspace, Project, Team, Task, Evaluation, Notification, Meeting, UserProfile, Template } from "@/types";
+import { User, Workspace, Project, Team, Task, Evaluation, Notification, Meeting, UserProfile } from "@/types";
 
 export const mockUsers: User[] = [
   { id: "user1", name: "นายอนันต์ ใจดี" },
@@ -355,88 +355,5 @@ export const mockProfiles: UserProfile[] = [
       { type: "Phone", value: "081-234-5678" },
     ],
     displayNames: {},
-  },
-];
-
-export const mockTemplates: Template[] = [
-  {
-    id: "tmpl1",
-    category: "project",
-    name: "โปรเจกต์พัฒนาเว็บแอป",
-    description: "โครงสร้างงานสำหรับโปรเจกต์พัฒนาเว็บแอปพลิเคชัน",
-    createdBy: "user1",
-    createdAt: "2026-03-01T00:00:00Z",
-    data: {
-      name: "โปรเจกต์พัฒนาเว็บแอป",
-      description: "โครงสร้างงานสำหรับโปรเจกต์พัฒนาเว็บแอปพลิเคชัน",
-      defaultTaskTitles: [
-        "วิเคราะห์ความต้องการ (Requirement Analysis)",
-        "ออกแบบ UI/UX",
-        "ออกแบบฐานข้อมูล",
-        "พัฒนา Frontend",
-        "พัฒนา Backend",
-        "เขียน Unit Test",
-        "ทดสอบระบบ (System Testing)",
-        "จัดทำเอกสาร",
-        "นำเสนอโปรเจกต์",
-      ],
-    },
-  },
-  {
-    id: "tmpl2",
-    category: "rubric",
-    name: "Rubric มาตรฐาน (เน้น Responsibility)",
-    description: "น้ำหนักคะแนนที่เน้นความรับผิดชอบและการมีส่วนร่วม",
-    createdBy: "user1",
-    createdAt: "2026-03-01T00:00:00Z",
-    data: {
-      weights: {
-        contribution: 25,
-        qualityOfWork: 20,
-        responsibility: 30,
-        communication: 10,
-        teamwork: 10,
-        effort: 5,
-      },
-    },
-  },
-  {
-    id: "tmpl3",
-    category: "task_structure",
-    name: "งานวิเคราะห์ความต้องการ",
-    description: "โครงสร้าง sub-task สำหรับงาน Requirement Analysis",
-    createdBy: "user1",
-    createdAt: "2026-03-01T00:00:00Z",
-    data: {
-      title: "วิเคราะห์ความต้องการระบบ",
-      description: "รวบรวมและวิเคราะห์ความต้องการจากผู้ใช้งาน",
-      subTasks: [
-        { title: "สัมภาษณ์ผู้ใช้งาน", manHours: 3 },
-        { title: "จัดทำ Use Case Diagram", manHours: 2 },
-        { title: "เขียน User Stories", manHours: 3 },
-        { title: "ตรวจสอบและยืนยัน Requirement", manHours: 2 },
-      ],
-      manHours: 10,
-      tags: [],
-    },
-  },
-  {
-    id: "tmpl4",
-    category: "peer_evaluation",
-    name: "แบบประเมินมาตรฐาน",
-    description: "เกณฑ์การประเมินเพื่อนร่วมทีมแบบมาตรฐาน 6 ด้าน",
-    createdBy: "user1",
-    createdAt: "2026-03-01T00:00:00Z",
-    data: {
-      criteriaLabels: [
-        { key: "contribution", customLabel: "การมีส่วนร่วมในโปรเจกต์" },
-        { key: "qualityOfWork", customLabel: "คุณภาพของผลงาน" },
-        { key: "responsibility", customLabel: "ความรับผิดชอบต่อหน้าที่" },
-        { key: "communication", customLabel: "ทักษะการสื่อสาร" },
-        { key: "teamwork", customLabel: "การทำงานร่วมกับทีม" },
-        { key: "effort", customLabel: "ความพยายามและความทุ่มเท" },
-      ],
-      notes: "ให้คะแนนในช่วง 1-5 โดย 1 = ต้องปรับปรุง, 5 = ดีเยี่ยม",
-    },
   },
 ];

@@ -23,7 +23,6 @@ import {
   Layers,
   Shield,
   UserCircle,
-  Library,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -69,7 +68,6 @@ const navSections: NavSection[] = [
     title: "จัดการ",
     items: [
       { label: "Workspace", href: "/workspace", icon: <Layers className="w-4 h-4" /> },
-      { label: "Template Library", href: "/templates", icon: <Library className="w-4 h-4" />, leaderOnly: true, requiresTeam: true },
       { label: "ตั้งค่าทีม", href: "/setup", icon: <Shield className="w-4 h-4" />, leaderOnly: true, requiresTeam: true },
     ],
   },
@@ -110,8 +108,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       href === "/dashboard" ||
       href === "/workspace" ||
       href === "/setup" ||
-      href === "/profile" ||
-      href === "/templates"
+      href === "/profile"
     ) {
       return pathname === href;
     }

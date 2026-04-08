@@ -487,7 +487,7 @@ export default function WorkspacePage() {
             <div className="space-y-1.5 border-t border-border pt-3">
               <Label>แต่งตั้ง Admin ใหม่</Label>
               <div className="flex gap-2">
-                <Select value={selectedAdminUserId} onValueChange={setSelectedAdminUserId}>
+                <Select value={selectedAdminUserId} onValueChange={(v) => setSelectedAdminUserId(v ?? "")}>
                   <SelectTrigger className="flex-1">
                     <SelectValue placeholder="เลือกผู้ใช้..." />
                   </SelectTrigger>
