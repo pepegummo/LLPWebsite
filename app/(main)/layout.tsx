@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store";
+import { useWorkspaceStore } from "@/store/workspaceStore";
+import { useProjectStore } from "@/store/projectStore";
+import { useTeamStore } from "@/store/teamStore";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { cn } from "@/lib/utils";
@@ -14,6 +17,9 @@ export default function StudentLayout({
 }) {
   const router = useRouter();
   const { currentUser } = useAuthStore();
+  const { fetchWorkspaces, workspaces } = useWorkspaceStore();
+  const { fetchProjects } = useProjectStore();
+  const { fetchMyTeams } = useTeamStore();
   const [hydrated, setHydrated] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -28,6 +34,18 @@ export default function StudentLayout({
       router.replace("/login");
     }
   }, [hydrated, currentUser, router]);
+
+  // Fetch core data once when authenticated
+  useEffect(() => {
+    if (!currentUser) return;
+    fetchWorkspaces();
+    fetchMyTeams();
+  }, [currentUser?.id]);
+
+  // Fetch projects for each workspace when workspaces load
+  useEffect(() => {
+    workspaces.forEach((ws) => fetchProjects(ws.id));
+  }, [workspaces.length]);
 
   if (!hydrated) {
     return (

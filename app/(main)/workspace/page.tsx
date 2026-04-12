@@ -1,14 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   useAuthStore,
   useWorkspaceStore,
   useProjectStore,
   useTeamStore,
 } from "@/store";
-import { mockUsers } from "@/lib/mockData";
-import { Workspace, Project, Team, TeamRole } from "@/types";
+import { useProfileStore } from "@/store/profileStore";
 import { WORKSPACE_ROLE_COLORS, WORKSPACE_ROLE_LABELS } from "@/lib/badge-constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,13 +32,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Layers,
   FolderOpen,
   Users,
@@ -50,19 +42,26 @@ import {
   Shield,
   UserPlus,
   X,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-function generateId() {
-  return Math.random().toString(36).substring(2, 11);
-}
-
 export default function WorkspacePage() {
   const { currentUser, updateCurrentUser } = useAuthStore();
-  const { workspaces, addWorkspace, deleteWorkspace, getWorkspaceRole, getWorkspacesByUser, addAdmin, removeAdmin } = useWorkspaceStore();
-  const { projects, addProject, deleteProject, getProjectsByWorkspace } = useProjectStore();
-  const { teams, addTeam, deleteTeam, getUserRole, getTeamsByUser } = useTeamStore();
+  const {
+    workspaces,
+    fetchWorkspaces,
+    createWorkspace,
+    deleteWorkspace,
+    getWorkspaceRole,
+    getWorkspacesByUser,
+    addAdmin,
+    removeAdmin,
+  } = useWorkspaceStore();
+  const { projects, fetchProjects, createProject, deleteProject, getProjectsByWorkspace } = useProjectStore();
+  const { teams, fetchMyTeams, createTeam, deleteTeam, getUserRole, getTeamsByUser } = useTeamStore();
+  const { getProfile, fetchProfile } = useProfileStore();
 
   // Dialogs
   const [newWsOpen, setNewWsOpen] = useState(false);
@@ -70,7 +69,7 @@ export default function WorkspacePage() {
   const [newTeamOpen, setNewTeamOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ type: "workspace" | "project" | "team"; id: string; name: string } | null>(null);
   const [manageAdminWsId, setManageAdminWsId] = useState<string | null>(null);
-  const [selectedAdminUserId, setSelectedAdminUserId] = useState("");
+  const [adminUserIdInput, setAdminUserIdInput] = useState("");
 
   // Form state
   const [wsName, setWsName] = useState("");
@@ -80,121 +79,154 @@ export default function WorkspacePage() {
   const [teamName, setTeamName] = useState("");
   const [teamProjectId, setTeamProjectId] = useState("");
 
+  // Loading state per action
+  const [saving, setSaving] = useState(false);
+
+  // Fetch projects for any new workspace that was just added
+  useEffect(() => {
+    workspaces.forEach((ws) => fetchProjects(ws.id));
+  }, [workspaces.length]);
+
+  // Fetch profiles for all admin IDs we encounter
+  useEffect(() => {
+    const allAdminIds = workspaces.flatMap((ws) => ws.adminIds);
+    const unique = [...new Set(allAdminIds)];
+    unique.forEach((id) => {
+      if (!getProfile(id)) fetchProfile(id).catch(() => {});
+    });
+  }, [workspaces, getProfile, fetchProfile]);
+
   if (!currentUser) return null;
 
-  // Workspaces ที่ user เป็น owner หรือ admin
   const managedWorkspaces = getWorkspacesByUser(currentUser.id);
   const userTeams = getTeamsByUser(currentUser.id);
 
-  const handleCreateWorkspace = () => {
-    if (!wsName.trim()) { toast.error("กรุณากรอกชื่อ Workspace"); return; }
-    const ws: Workspace = {
-      id: generateId(),
-      name: wsName.trim(),
-      ownerId: currentUser.id,
-      adminIds: [],
-      createdAt: new Date().toISOString(),
-    };
-    addWorkspace(ws);
-    setWsName("");
-    setNewWsOpen(false);
-    toast.success("สร้าง Workspace แล้ว");
-  };
-
-  const handleCreateProject = () => {
-    if (!projName.trim()) { toast.error("กรุณากรอกชื่อ Project"); return; }
-    if (!projWorkspaceId) { toast.error("กรุณาเลือก Workspace"); return; }
-    const proj: Project = {
-      id: generateId(),
-      workspaceId: projWorkspaceId,
-      name: projName.trim(),
-      description: projDesc.trim() || undefined,
-      createdAt: new Date().toISOString(),
-    };
-    addProject(proj);
-    setProjName("");
-    setProjDesc("");
-    setProjWorkspaceId("");
-    setNewProjOpen(false);
-    toast.success("สร้าง Project แล้ว");
-  };
-
-  const handleCreateTeam = () => {
-    if (!teamName.trim()) { toast.error("กรุณากรอกชื่อทีม"); return; }
-    if (!teamProjectId) { toast.error("กรุณาเลือก Project"); return; }
-    const proj = projects.find((p) => p.id === teamProjectId);
-    if (!proj) return;
-
-    const team: Team = {
-      id: generateId(),
-      projectId: teamProjectId,
-      workspaceId: proj.workspaceId,
-      name: teamName.trim(),
-      members: [{ userId: currentUser.id, role: "team_leader" as TeamRole }],
-      invitedIds: [],
-      createdAt: new Date().toISOString(),
-    };
-    addTeam(team);
-
-    if (!currentUser.activeTeamId) {
-      updateCurrentUser({ ...currentUser, activeTeamId: team.id });
-    }
-
-    setTeamName("");
-    setTeamProjectId("");
-    setNewTeamOpen(false);
-    toast.success(`สร้างทีม "${team.name}" แล้ว — คุณเป็น Team Leader อัตโนมัติ`);
-  };
-
-  const handleDelete = () => {
-    if (!deleteTarget) return;
-    if (deleteTarget.type === "workspace") {
-      deleteWorkspace(deleteTarget.id);
-      toast.success("ลบ Workspace แล้ว");
-    } else if (deleteTarget.type === "project") {
-      deleteProject(deleteTarget.id);
-      toast.success("ลบ Project แล้ว");
-    } else {
-      deleteTeam(deleteTarget.id);
-      if (currentUser.activeTeamId === deleteTarget.id) {
-        const remaining = userTeams.filter((t) => t.id !== deleteTarget.id);
-        updateCurrentUser({ ...currentUser, activeTeamId: remaining[0]?.id ?? null });
-      }
-      toast.success("ลบทีมแล้ว");
-    }
-    setDeleteTarget(null);
-  };
-
-  const handleAddAdmin = () => {
-    if (!manageAdminWsId || !selectedAdminUserId) return;
-    const ws = workspaces.find((w) => w.id === manageAdminWsId);
-    if (!ws) return;
-    if (ws.ownerId === selectedAdminUserId) {
-      toast.error("ผู้ใช้นี้เป็น Owner อยู่แล้ว");
-      return;
-    }
-    addAdmin(manageAdminWsId, selectedAdminUserId);
-    setSelectedAdminUserId("");
-    toast.success("แต่งตั้ง Workspace Admin แล้ว");
-  };
-
-  const handleRemoveAdmin = (wsId: string, userId: string) => {
-    removeAdmin(wsId, userId);
-    toast.success("ถอด Workspace Admin แล้ว");
-  };
-
-  // Projects visible to user (from managed workspaces + teams they're in)
   const visibleProjectIds = new Set([
     ...managedWorkspaces.flatMap((ws) => getProjectsByWorkspace(ws.id).map((p) => p.id)),
     ...userTeams.map((t) => t.projectId),
   ]);
   const visibleProjects = projects.filter((p) => visibleProjectIds.has(p.id));
 
-  // Workspace being managed for admin
+  const handleCreateWorkspace = async () => {
+    if (!wsName.trim()) { toast.error("กรุณากรอกชื่อ Workspace"); return; }
+    setSaving(true);
+    try {
+      await createWorkspace(wsName.trim());
+      setWsName("");
+      setNewWsOpen(false);
+      toast.success("สร้าง Workspace แล้ว");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "สร้าง Workspace ไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateProject = async () => {
+    if (!projName.trim()) { toast.error("กรุณากรอกชื่อ Project"); return; }
+    if (!projWorkspaceId) { toast.error("กรุณาเลือก Workspace"); return; }
+    setSaving(true);
+    try {
+      await createProject(projWorkspaceId, projName.trim(), projDesc.trim() || undefined);
+      setProjName("");
+      setProjDesc("");
+      setProjWorkspaceId("");
+      setNewProjOpen(false);
+      toast.success("สร้าง Project แล้ว");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "สร้าง Project ไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateTeam = async () => {
+    if (!teamName.trim()) { toast.error("กรุณากรอกชื่อทีม"); return; }
+    if (!teamProjectId) { toast.error("กรุณาเลือก Project"); return; }
+    const proj = projects.find((p) => p.id === teamProjectId);
+    if (!proj) return;
+    setSaving(true);
+    try {
+      const team = await createTeam(teamProjectId, proj.workspaceId, teamName.trim());
+      if (!currentUser.activeTeamId) {
+        updateCurrentUser({ ...currentUser, activeTeamId: team.id });
+      }
+      setTeamName("");
+      setTeamProjectId("");
+      setNewTeamOpen(false);
+      toast.success(`สร้างทีม "${team.name}" แล้ว — คุณเป็น Team Leader อัตโนมัติ`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "สร้างทีมไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setSaving(true);
+    try {
+      if (deleteTarget.type === "workspace") {
+        deleteWorkspace(deleteTarget.id);
+        toast.success("ลบ Workspace แล้ว");
+      } else if (deleteTarget.type === "project") {
+        await deleteProject(deleteTarget.id);
+        toast.success("ลบ Project แล้ว");
+      } else {
+        deleteTeam(deleteTarget.id);
+        if (currentUser.activeTeamId === deleteTarget.id) {
+          const remaining = userTeams.filter((t) => t.id !== deleteTarget.id);
+          updateCurrentUser({ ...currentUser, activeTeamId: remaining[0]?.id ?? null });
+        }
+        toast.success("ลบทีมแล้ว");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "ลบไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+      setDeleteTarget(null);
+    }
+  };
+
+  const handleAddAdmin = async () => {
+    if (!manageAdminWsId || !adminUserIdInput.trim()) return;
+    const ws = workspaces.find((w) => w.id === manageAdminWsId);
+    if (!ws) return;
+    if (ws.ownerId === adminUserIdInput.trim()) {
+      toast.error("ผู้ใช้นี้เป็น Owner อยู่แล้ว");
+      return;
+    }
+    setSaving(true);
+    try {
+      await addAdmin(manageAdminWsId, adminUserIdInput.trim());
+      setAdminUserIdInput("");
+      toast.success("แต่งตั้ง Workspace Admin แล้ว");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "แต่งตั้ง Admin ไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemoveAdmin = async (wsId: string, userId: string) => {
+    try {
+      await removeAdmin(wsId, userId);
+      toast.success("ถอด Workspace Admin แล้ว");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "ถอด Admin ไม่สำเร็จ");
+    }
+  };
+
+  const getAdminDisplayName = (userId: string) => {
+    const profile = getProfile(userId);
+    return profile
+      ? profile.displayNames[Object.keys(profile.displayNames)[0]] ||
+          [profile.firstName, profile.lastName].filter(Boolean).join(" ") ||
+          userId
+      : userId;
+  };
+
   const manageAdminWs = workspaces.find((w) => w.id === manageAdminWsId);
-  const adminCandidates = mockUsers.filter(
-    (u) => u.id !== currentUser.id && u.id !== manageAdminWs?.ownerId && !(manageAdminWs?.adminIds ?? []).includes(u.id)
-  );
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -295,7 +327,6 @@ export default function WorkspacePage() {
             const isOwner = myWsRole === "owner";
             const canManageProject = isOwner || myWsRole === "admin";
             const wsProjects = getProjectsByWorkspace(ws.id);
-            const adminUsers = mockUsers.filter((u) => (ws.adminIds ?? []).includes(u.id));
 
             return (
               <Card key={ws.id}>
@@ -309,19 +340,17 @@ export default function WorkspacePage() {
                       </Badge>
                     </CardTitle>
                     <div className="flex items-center gap-1">
-                      {/* แต่งตั้ง Admin — Owner only */}
                       {isOwner && (
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-7 text-xs text-muted-foreground hover:text-primary"
-                          onClick={() => { setManageAdminWsId(ws.id); setSelectedAdminUserId(""); }}
+                          onClick={() => { setManageAdminWsId(ws.id); setAdminUserIdInput(""); }}
                         >
                           <Shield className="w-3.5 h-3.5 mr-1" />
                           จัดการ Admin
                         </Button>
                       )}
-                      {/* ลบ Workspace — Owner only */}
                       {isOwner && (
                         <Button
                           variant="ghost"
@@ -336,17 +365,17 @@ export default function WorkspacePage() {
                   </div>
 
                   {/* Admin list */}
-                  {adminUsers.length > 0 && (
+                  {(ws.adminIds ?? []).length > 0 && (
                     <div className="flex items-center gap-1.5 flex-wrap mt-1">
                       <span className="text-xs text-muted-foreground">Admins:</span>
-                      {adminUsers.map((u) => (
-                        <Badge key={u.id} variant="outline" className="text-xs gap-1">
+                      {ws.adminIds.map((uid) => (
+                        <Badge key={uid} variant="outline" className="text-xs gap-1">
                           <Shield className="w-2.5 h-2.5 text-violet-500" />
-                          {u.name}
+                          {getAdminDisplayName(uid)}
                           {isOwner && (
                             <button
                               className="ml-0.5 hover:text-destructive"
-                              onClick={() => handleRemoveAdmin(ws.id, u.id)}
+                              onClick={() => handleRemoveAdmin(ws.id, uid)}
                             >
                               <X className="w-2.5 h-2.5" />
                             </button>
@@ -373,7 +402,6 @@ export default function WorkspacePage() {
                                 <span className="text-xs text-muted-foreground">— {proj.description}</span>
                               )}
                             </div>
-                            {/* ลบ Project — Owner หรือ Admin */}
                             {canManageProject && (
                               <Button
                                 variant="ghost"
@@ -386,7 +414,6 @@ export default function WorkspacePage() {
                             )}
                           </div>
 
-                          {/* Teams in project */}
                           <div className="pl-6 space-y-1.5">
                             {projTeams.map((team) => {
                               const myRole = getUserRole(team.id, currentUser.id);
@@ -429,7 +456,6 @@ export default function WorkspacePage() {
                     })
                   )}
 
-                  {/* เพิ่ม Project — Owner หรือ Admin */}
                   {canManageProject && (
                     <Button
                       variant="ghost"
@@ -458,21 +484,20 @@ export default function WorkspacePage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Current admins */}
             {manageAdminWs && (manageAdminWs.adminIds ?? []).length > 0 ? (
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">Admin ปัจจุบัน</Label>
-                {mockUsers.filter((u) => (manageAdminWs.adminIds ?? []).includes(u.id)).map((u) => (
-                  <div key={u.id} className="flex items-center justify-between border border-border rounded-md px-3 py-2">
+                {manageAdminWs.adminIds.map((uid) => (
+                  <div key={uid} className="flex items-center justify-between border border-border rounded-md px-3 py-2">
                     <div className="flex items-center gap-2">
                       <Shield className="w-3.5 h-3.5 text-violet-500" />
-                      <span className="text-sm">{u.name}</span>
+                      <span className="text-sm">{getAdminDisplayName(uid)}</span>
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6 hover:text-destructive"
-                      onClick={() => handleRemoveAdmin(manageAdminWsId!, u.id)}
+                      onClick={() => handleRemoveAdmin(manageAdminWsId!, uid)}
                     >
                       <X className="w-3 h-3" />
                     </Button>
@@ -483,26 +508,17 @@ export default function WorkspacePage() {
               <p className="text-sm text-muted-foreground">ยังไม่มี Admin</p>
             )}
 
-            {/* Add admin */}
             <div className="space-y-1.5 border-t border-border pt-3">
-              <Label>แต่งตั้ง Admin ใหม่</Label>
+              <Label>แต่งตั้ง Admin ใหม่ (User ID)</Label>
               <div className="flex gap-2">
-                <Select value={selectedAdminUserId} onValueChange={(v) => setSelectedAdminUserId(v ?? "")}>
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="เลือกผู้ใช้..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {adminCandidates.length === 0 ? (
-                      <SelectItem value="_none" disabled>ไม่มีผู้ใช้ที่สามารถเพิ่มได้</SelectItem>
-                    ) : (
-                      adminCandidates.map((u) => (
-                        <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-                <Button onClick={handleAddAdmin} disabled={!selectedAdminUserId || selectedAdminUserId === "_none"}>
-                  <UserPlus className="w-4 h-4" />
+                <Input
+                  value={adminUserIdInput}
+                  onChange={(e) => setAdminUserIdInput(e.target.value)}
+                  placeholder="ใส่ User ID..."
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddAdmin(); }}
+                />
+                <Button onClick={handleAddAdmin} disabled={!adminUserIdInput.trim() || saving}>
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
                 </Button>
               </div>
             </div>
@@ -522,12 +538,20 @@ export default function WorkspacePage() {
           <div className="space-y-3">
             <div className="space-y-1">
               <Label>ชื่อ Workspace *</Label>
-              <Input value={wsName} onChange={(e) => setWsName(e.target.value)} placeholder="เช่น CS101 - ระบบจัดการโปรเจกต์" onKeyDown={(e) => { if (e.key === "Enter") handleCreateWorkspace(); }} />
+              <Input
+                value={wsName}
+                onChange={(e) => setWsName(e.target.value)}
+                placeholder="เช่น CS101 - ระบบจัดการโปรเจกต์"
+                onKeyDown={(e) => { if (e.key === "Enter") handleCreateWorkspace(); }}
+              />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewWsOpen(false)}>ยกเลิก</Button>
-            <Button onClick={handleCreateWorkspace}>สร้าง</Button>
+            <Button onClick={handleCreateWorkspace} disabled={saving}>
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              สร้าง
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -563,7 +587,10 @@ export default function WorkspacePage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewProjOpen(false)}>ยกเลิก</Button>
-            <Button onClick={handleCreateProject}>สร้าง</Button>
+            <Button onClick={handleCreateProject} disabled={saving}>
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              สร้าง
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -590,7 +617,12 @@ export default function WorkspacePage() {
             </div>
             <div className="space-y-1">
               <Label>ชื่อทีม *</Label>
-              <Input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="เช่น ทีม Alpha" onKeyDown={(e) => { if (e.key === "Enter") handleCreateTeam(); }} />
+              <Input
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                placeholder="เช่น ทีม Alpha"
+                onKeyDown={(e) => { if (e.key === "Enter") handleCreateTeam(); }}
+              />
             </div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <Crown className="w-3.5 h-3.5 text-amber-500" />
@@ -599,7 +631,10 @@ export default function WorkspacePage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewTeamOpen(false)}>ยกเลิก</Button>
-            <Button onClick={handleCreateTeam}>สร้างทีม</Button>
+            <Button onClick={handleCreateTeam} disabled={saving}>
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              สร้างทีม
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -615,7 +650,14 @@ export default function WorkspacePage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">ลบ</AlertDialogAction>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={saving}
+            >
+              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              ลบ
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

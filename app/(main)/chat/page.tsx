@@ -1,15 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import {
-  useAuthStore,
-  useTeamStore,
-  useChatStore,
-  useNotificationStore,
-} from "@/store";
-import { mockUsers } from "@/lib/mockData";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useAuthStore, useTeamStore, useChatStore } from "@/store";
+import { useProfileStore } from "@/store/profileStore";
 import { useDisplayName } from "@/lib/useDisplayName";
-import { User } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -33,12 +27,9 @@ import {
   Check,
   X,
   AtSign,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-function generateId() {
-  return Math.random().toString(36).substring(2, 11);
-}
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
@@ -53,8 +44,7 @@ function formatTime(iso: string): string {
 }
 
 function renderContent(content: string) {
-  const parts = content.split(/(@\S+)/g);
-  return parts.map((part, i) =>
+  return content.split(/(@\S+)/g).map((part, i) =>
     part.startsWith("@") ? (
       <span key={i} className="font-semibold bg-white/20 rounded px-0.5">{part}</span>
     ) : part
@@ -62,8 +52,7 @@ function renderContent(content: string) {
 }
 
 function renderContentOther(content: string) {
-  const parts = content.split(/(@\S+)/g);
-  return parts.map((part, i) =>
+  return content.split(/(@\S+)/g).map((part, i) =>
     part.startsWith("@") ? (
       <span key={i} className="text-primary font-semibold bg-primary/10 rounded px-0.5">{part}</span>
     ) : part
@@ -74,19 +63,22 @@ export default function StudentChatPage() {
   const { currentUser } = useAuthStore();
   const { teams } = useTeamStore();
   const resolveDisplayName = useDisplayName();
+  const { getProfile, fetchProfile } = useProfileStore();
   const {
+    fetchChannels,
+    fetchMessages,
     addChannel,
-    deleteChannel,
     renameChannel,
+    deleteChannel,
     sendMessage,
     deleteMessage,
     getChannelsByTeam,
     getMessagesByChannel,
   } = useChatStore();
-  const { addNotification } = useNotificationStore();
 
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
   const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionAtIndex, setMentionAtIndex] = useState(-1);
   const [newChannelName, setNewChannelName] = useState("");
@@ -102,42 +94,80 @@ export default function StudentChatPage() {
 
   const activeTeamId = currentUser.activeTeamId ?? null;
   const activeTeam = teams.find((t) => t.id === activeTeamId);
-  const teamMemberIds = activeTeam ? activeTeam.members.map((m) => m.userId) : [];
-  const groupMembers: User[] = mockUsers.filter((u) => teamMemberIds.includes(u.id));
+  const memberIds = activeTeam?.members.map((m) => m.userId) ?? [];
 
   const groupChannels = activeTeamId ? getChannelsByTeam(activeTeamId) : [];
   const channelMessages = selectedChannelId ? getMessagesByChannel(selectedChannelId) : [];
 
-  useEffect(() => {
-    if (!activeTeamId || !currentUser) return;
-    const existing = getChannelsByTeam(activeTeamId);
-    if (existing.length === 0) {
-      addChannel({
-        id: generateId(),
-        teamId: activeTeamId,
-        name: "general",
-        createdBy: currentUser.id,
-        createdAt: new Date().toISOString(),
-      });
+  // Fetch channels on team change, auto-create general if empty
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const ensureGeneralChannel = useCallback(async (teamId: string) => {
+    await fetchChannels(teamId);
+    const channels = getChannelsByTeam(teamId);
+    if (channels.length === 0) {
+      const ch = await addChannel(teamId, "general").catch(() => null);
+      if (ch) setSelectedChannelId(ch.id);
     }
-  }, [activeTeamId]);
+  }, [fetchChannels, getChannelsByTeam, addChannel]);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (!activeTeamId) return;
+    ensureGeneralChannel(activeTeamId);
+  }, [activeTeamId, ensureGeneralChannel]);
+
+  // Select first channel when channels load
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (!selectedChannelId && groupChannels.length > 0) {
       setSelectedChannelId(groupChannels[0].id);
     }
   }, [groupChannels.length, selectedChannelId]);
 
+  // Load messages when channel selected
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (selectedChannelId) {
+      fetchMessages(selectedChannelId).catch(() => {});
+    }
+  }, [selectedChannelId, fetchMessages]);
+
+  // Fetch profiles for message senders
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    const senderIds = [...new Set(channelMessages.map((m) => m.senderId))];
+    senderIds.forEach((id) => {
+      if (!getProfile(id)) fetchProfile(id).catch(() => {});
+    });
+  }, [channelMessages.length]);
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [channelMessages.length]);
+
+  const getSenderName = (senderId: string) => {
+    const profile = getProfile(senderId);
+    return resolveDisplayName(senderId, profile?.firstName || senderId, activeTeamId ?? "");
+  };
+
+  // Mention suggestions from real team members
+  const memberSuggestions = memberIds
+    .filter((id) => id !== currentUser.id)
+    .map((id) => ({ id, name: getSenderName(id) }));
+
+  const mentionSuggestions =
+    mentionQuery !== null
+      ? memberSuggestions.filter((m) =>
+          m.name.toLowerCase().includes(mentionQuery.toLowerCase())
+        )
+      : [];
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setInput(val);
     const cursorPos = e.target.selectionStart ?? val.length;
-    const textBeforeCursor = val.slice(0, cursorPos);
-    const match = textBeforeCursor.match(/@([^\s@]*)$/);
+    const match = val.slice(0, cursorPos).match(/@([^\s@]*)$/);
     if (match) {
       setMentionQuery(match[1]);
       setMentionAtIndex(cursorPos - match[0].length);
@@ -147,100 +177,78 @@ export default function StudentChatPage() {
     }
   };
 
-  const getMemberDisplayName = (member: User) =>
-    resolveDisplayName(member.id, member.name, activeTeamId ?? "");
-
-  const handleSelectMention = (member: User) => {
+  const handleSelectMention = (member: { id: string; name: string }) => {
     if (mentionAtIndex < 0 || mentionQuery === null) return;
     const beforeAt = input.slice(0, mentionAtIndex);
     const afterMention = input.slice(mentionAtIndex + 1 + mentionQuery.length);
-    const dname = getMemberDisplayName(member);
-    setInput(`${beforeAt}@${dname} ${afterMention}`);
+    setInput(`${beforeAt}@${member.name} ${afterMention}`);
     setMentionQuery(null);
     setMentionAtIndex(-1);
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-  const mentionSuggestions =
-    mentionQuery !== null
-      ? groupMembers.filter((m) => {
-          const dname = getMemberDisplayName(m);
-          return (
-            dname.toLowerCase().includes(mentionQuery.toLowerCase()) ||
-            m.name.toLowerCase().includes(mentionQuery.toLowerCase())
-          );
-        })
-      : [];
+  const handleSend = async () => {
+    if (!input.trim() || !selectedChannelId || !activeTeamId || sending) return;
 
-  const handleSend = () => {
-    if (!input.trim() || !selectedChannelId || !activeTeamId) return;
+    const mentionedIds = memberSuggestions
+      .filter((m) => input.includes(`@${m.name}`))
+      .map((m) => m.id);
 
-    const mentionedIds = groupMembers
-      .filter((m) => {
-        const dname = getMemberDisplayName(m);
-        return input.includes(`@${dname}`) || input.includes(`@${m.name}`);
-      })
-      .map((m) => m.id)
-      .filter((id) => id !== currentUser.id);
-
-    const msgId = generateId();
-    sendMessage({
-      id: msgId,
-      channelId: selectedChannelId,
-      teamId: activeTeamId,
-      senderId: currentUser.id,
-      content: input.trim(),
-      createdAt: new Date().toISOString(),
-      mentions: mentionedIds,
-    });
-
-    const selectedChannel = groupChannels.find((c) => c.id === selectedChannelId);
-    mentionedIds.forEach((userId) => {
-      addNotification({
-        id: generateId(),
-        userId,
-        type: "mention",
-        message: `${resolveDisplayName(currentUser.id, currentUser.name, activeTeamId ?? "")} กล่าวถึงคุณใน #${selectedChannel?.name ?? "chat"}: ${input.trim().slice(0, 60)}${input.trim().length > 60 ? "…" : ""}`,
-        read: false,
-        createdAt: new Date().toISOString(),
-        meta: { channelId: selectedChannelId, teamId: activeTeamId },
-      });
-    });
-
-    setInput("");
-    setMentionQuery(null);
+    setSending(true);
+    try {
+      await sendMessage(selectedChannelId, activeTeamId, input.trim(), mentionedIds.length ? mentionedIds : undefined);
+      setInput("");
+      setMentionQuery(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "ส่งข้อความไม่สำเร็จ");
+    } finally {
+      setSending(false);
+    }
   };
 
-  const handleAddChannel = () => {
+  const handleAddChannel = async () => {
     if (!newChannelName.trim() || !activeTeamId) return;
-    const id = generateId();
-    addChannel({
-      id,
-      teamId: activeTeamId,
-      name: newChannelName.trim().toLowerCase().replace(/\s+/g, "-"),
-      createdBy: currentUser.id,
-      createdAt: new Date().toISOString(),
-    });
-    setSelectedChannelId(id);
-    setNewChannelName("");
-    setAddingChannel(false);
-    toast.success("สร้างช่องแชทแล้ว");
+    try {
+      const ch = await addChannel(activeTeamId, newChannelName.trim().toLowerCase().replace(/\s+/g, "-"));
+      setSelectedChannelId(ch.id);
+      setNewChannelName("");
+      setAddingChannel(false);
+      toast.success("สร้างช่องแชทแล้ว");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "สร้างช่องไม่สำเร็จ");
+    }
   };
 
-  const handleRenameConfirm = () => {
+  const handleRenameConfirm = async () => {
     if (!renamingChannelId || !renameValue.trim()) return;
-    renameChannel(renamingChannelId, renameValue.trim().toLowerCase().replace(/\s+/g, "-"));
-    setRenamingChannelId(null);
-    setRenameValue("");
-    toast.success("เปลี่ยนชื่อช่องแชทแล้ว");
+    try {
+      await renameChannel(renamingChannelId, renameValue.trim().toLowerCase().replace(/\s+/g, "-"));
+      setRenamingChannelId(null);
+      setRenameValue("");
+      toast.success("เปลี่ยนชื่อช่องแชทแล้ว");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "เปลี่ยนชื่อไม่สำเร็จ");
+    }
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (!deletingChannelId) return;
-    if (selectedChannelId === deletingChannelId) setSelectedChannelId(null);
-    deleteChannel(deletingChannelId);
-    setDeletingChannelId(null);
-    toast.success("ลบช่องแชทแล้ว");
+    try {
+      await deleteChannel(deletingChannelId);
+      if (selectedChannelId === deletingChannelId) setSelectedChannelId(null);
+      setDeletingChannelId(null);
+      toast.success("ลบช่องแชทแล้ว");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "ลบช่องไม่สำเร็จ");
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      await deleteMessage(messageId);
+    } catch {
+      toast.error("ลบข้อความไม่สำเร็จ");
+    }
   };
 
   const selectedChannel = groupChannels.find((c) => c.id === selectedChannelId);
@@ -399,13 +407,11 @@ export default function StudentChatPage() {
                   ) : (
                     messageGroups.map((group, gi) => {
                       const isMe = group.senderId === currentUser.id;
-                      const sender = mockUsers.find((u) => u.id === group.senderId);
+                      const senderName = isMe ? "คุณ" : getSenderName(group.senderId);
                       return (
                         <div key={gi} className={cn("flex flex-col gap-1", isMe && "items-end")}>
                           <div className={cn("flex items-baseline gap-2 px-1", isMe && "flex-row-reverse")}>
-                            <span className="text-xs font-semibold text-foreground">
-                              {isMe ? "คุณ" : sender ? resolveDisplayName(sender.id, sender.name, activeTeamId ?? "") : "?"}
-                            </span>
+                            <span className="text-xs font-semibold text-foreground">{senderName}</span>
                             <span className="text-[11px] text-muted-foreground">
                               {formatTime(group.messages[0].createdAt)}
                             </span>
@@ -422,8 +428,8 @@ export default function StudentChatPage() {
                               </div>
                               {isMe && (
                                 <button
-                                  onClick={() => deleteMessage(msg.id)}
-                                  className="opacity-0 hover:opacity-100 group-hover:opacity-100 p-1 rounded-full hover:bg-muted transition-opacity self-center shrink-0"
+                                  onClick={() => handleDeleteMessage(msg.id)}
+                                  className="opacity-0 hover:opacity-100 p-1 rounded-full hover:bg-muted transition-opacity self-center shrink-0"
                                 >
                                   <Trash2 className="w-3 h-3 text-muted-foreground hover:text-destructive" />
                                 </button>
@@ -450,7 +456,7 @@ export default function StudentChatPage() {
                             className="flex items-center gap-2.5 px-3 py-2 text-sm w-full text-left hover:bg-muted transition-colors"
                           >
                             <AtSign className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                            <span className="font-medium">{getMemberDisplayName(m)}</span>
+                            <span className="font-medium">{m.name}</span>
                           </button>
                         ))}
                       </div>
@@ -471,8 +477,8 @@ export default function StudentChatPage() {
                         placeholder="พิมพ์ข้อความ... ใช้ @ เพื่อ mention"
                         className="flex-1 rounded-xl bg-muted/50 border-muted-foreground/20 focus-visible:ring-1"
                       />
-                      <Button onClick={handleSend} disabled={!input.trim()} size="icon" className="rounded-xl shrink-0">
-                        <Send className="w-4 h-4" />
+                      <Button onClick={handleSend} disabled={!input.trim() || sending} size="icon" className="rounded-xl shrink-0">
+                        {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                       </Button>
                     </div>
                   </div>

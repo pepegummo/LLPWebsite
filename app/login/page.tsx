@@ -2,55 +2,88 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthStore, useTeamStore } from "@/store";
-import { mockUsers } from "@/lib/mockData";
+import { useAuthStore } from "@/store";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
-import { ClipboardList, Lock, Mail, Eye, EyeOff, FlaskConical, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  ClipboardList,
+  Lock,
+  Mail,
+  Eye,
+  EyeOff,
+  Loader2,
+  UserPlus,
+  LogIn,
+  User,
+} from "lucide-react";
+
+type Tab = "login" | "register";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuthStore();
-  const { getTeamsByUser } = useTeamStore();
+  const { loginWithCredentials } = useAuthStore();
 
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [tab, setTab] = useState<Tab>("login");
+  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [mockExpanded, setMockExpanded] = useState(false);
 
-  const handleMockLogin = () => {
-    if (!selectedUserId) {
-      toast.error("กรุณาเลือกผู้ใช้");
+  // Login fields
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+
+  // Register fields
+  const [regEmail, setRegEmail] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regName, setRegName] = useState("");
+  const [regFirstName, setRegFirstName] = useState("");
+  const [regLastName, setRegLastName] = useState("");
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginEmail || !loginPassword) {
+      toast.error("กรุณากรอกอีเมลและรหัสผ่าน");
       return;
     }
-    const user = mockUsers.find((u) => u.id === selectedUserId);
-    if (!user) {
-      toast.error("ไม่พบผู้ใช้");
-      return;
+    setLoading(true);
+    try {
+      await loginWithCredentials(loginEmail, loginPassword);
+      toast.success("เข้าสู่ระบบสำเร็จ");
+      router.replace("/dashboard");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "เข้าสู่ระบบไม่สำเร็จ");
+    } finally {
+      setLoading(false);
     }
-
-    const userTeams = getTeamsByUser(user.id);
-    const defaultTeamId = userTeams.length > 0 ? userTeams[0].id : null;
-
-    login({
-      ...user,
-      activeTeamId: defaultTeamId,
-    });
-
-    toast.success(`ยินดีต้อนรับ ${user.name}!`);
-    router.replace("/dashboard");
   };
 
-  const selectedUser = mockUsers.find((u) => u.id === selectedUserId);
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!regEmail || !regPassword || !regName) {
+      toast.error("กรุณากรอกอีเมล รหัสผ่าน และชื่อ");
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.auth.register(
+        regEmail,
+        regPassword,
+        regName,
+        regFirstName || undefined,
+        regLastName || undefined,
+      );
+      // Auto-login after successful registration
+      await loginWithCredentials(regEmail, regPassword);
+      toast.success("สมัครสมาชิกสำเร็จ ยินดีต้อนรับ!");
+      router.replace("/dashboard");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "สมัครสมาชิกไม่สำเร็จ");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
@@ -66,162 +99,215 @@ export default function LoginPage() {
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          {/* Email/Password section */}
-          <div className="p-6 space-y-4">
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="font-semibold text-slate-800">เข้าสู่ระบบ</h2>
-              <Badge variant="secondary" className="text-xs gap-1 text-slate-500">
-                <Lock className="w-3 h-3" />
-                Coming Soon
-              </Badge>
-            </div>
-
-            {/* Email */}
-            <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-slate-700 text-sm">
-                อีเมล
-              </Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="email@university.ac.th"
-                  disabled
-                  className="pl-9 bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
-                />
-              </div>
-            </div>
-
-            {/* Password */}
-            <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-slate-700 text-sm">
-                รหัสผ่าน
-              </Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  disabled
-                  className="pl-9 pr-9 bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
-                />
-                <button
-                  type="button"
-                  disabled
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 cursor-not-allowed"
-                  onClick={() => setShowPassword((v) => !v)}
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <Button disabled className="w-full bg-slate-100 text-slate-400 cursor-not-allowed" size="lg">
-              <Lock className="w-4 h-4 mr-2" />
-              เข้าสู่ระบบ
-            </Button>
-
-            <p className="text-center text-xs text-slate-400">
-              ระบบ authentication จริงอยู่ระหว่างการพัฒนา
-            </p>
-          </div>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3 px-6">
-            <div className="flex-1 h-px bg-slate-200" />
-            <span className="text-xs text-slate-400 font-medium">หรือ</span>
-            <div className="flex-1 h-px bg-slate-200" />
-          </div>
-
-          {/* Mock login section */}
-          <div className="p-6 space-y-4 bg-slate-50/60">
+          {/* Tabs */}
+          <div className="flex border-b border-slate-200">
             <button
               type="button"
-              onClick={() => setMockExpanded((v) => !v)}
-              className="w-full flex items-center justify-between group"
+              onClick={() => setTab("login")}
+              className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-medium transition-colors ${
+                tab === "login"
+                  ? "text-primary border-b-2 border-primary bg-primary/5"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
             >
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center">
-                  <FlaskConical className="w-3.5 h-3.5 text-amber-600" />
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-medium text-slate-700">Mock Login</p>
-                  <p className="text-xs text-slate-400">สำหรับ development &amp; demo</p>
-                </div>
-              </div>
-              {mockExpanded
-                ? <ChevronUp className="w-4 h-4 text-slate-400" />
-                : <ChevronDown className="w-4 h-4 text-slate-400" />
-              }
+              <LogIn className="w-4 h-4" />
+              เข้าสู่ระบบ
             </button>
-
-            {mockExpanded && (
-              <div className="space-y-3 pt-1">
-                {/* User selector */}
-                <div className="space-y-1.5">
-                  <Label className="text-slate-700 text-sm">เลือกบัญชีทดสอบ</Label>
-                  <Select
-                    value={selectedUserId}
-                    onValueChange={(v) => setSelectedUserId(v ?? "")}
-                  >
-                    <SelectTrigger className="bg-white border-slate-200">
-                      <SelectValue>
-                        {(v: string | null) => v ? (mockUsers.find((u) => u.id === v)?.name ?? "เลือกผู้ใช้...") : "เลือกผู้ใช้..."}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {mockUsers.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Selected user preview */}
-                {selectedUser && (
-                  <div className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 px-3 py-2.5">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <span className="text-xs font-bold text-primary">
-                        {selectedUser.name.charAt(0)}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-800 truncate">
-                        {selectedUser.name}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        ID: {selectedUser.id}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <Button
-                  onClick={handleMockLogin}
-                  className="w-full bg-amber-500 hover:bg-amber-600 text-white"
-                  size="lg"
-                  disabled={!selectedUserId}
-                >
-                  <FlaskConical className="w-4 h-4 mr-2" />
-                  เข้าสู่ระบบด้วย Mock Account
-                </Button>
-              </div>
-            )}
-
-            {!mockExpanded && (
-              <button
-                type="button"
-                onClick={() => setMockExpanded(true)}
-                className="w-full text-xs text-slate-400 hover:text-amber-600 transition-colors text-center"
-              >
-                คลิกเพื่อใช้ Mock Login →
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setTab("register")}
+              className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-medium transition-colors ${
+                tab === "register"
+                  ? "text-primary border-b-2 border-primary bg-primary/5"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <UserPlus className="w-4 h-4" />
+              สมัครสมาชิก
+            </button>
           </div>
+
+          {/* Login Form */}
+          {tab === "login" && (
+            <form onSubmit={handleLogin} className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="login-email" className="text-slate-700 text-sm">
+                  อีเมล
+                </Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input
+                    id="login-email"
+                    type="email"
+                    placeholder="email@university.ac.th"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    className="pl-9"
+                    autoComplete="email"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="login-password" className="text-slate-700 text-sm">
+                  รหัสผ่าน
+                </Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input
+                    id="login-password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    className="pl-9 pr-9"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    onClick={() => setShowPassword((v) => !v)}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <Button type="submit" disabled={loading} className="w-full" size="lg">
+                {loading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <LogIn className="w-4 h-4 mr-2" />
+                )}
+                เข้าสู่ระบบ
+              </Button>
+
+              <p className="text-center text-xs text-slate-400">
+                ยังไม่มีบัญชี?{" "}
+                <button
+                  type="button"
+                  onClick={() => setTab("register")}
+                  className="text-primary hover:underline font-medium"
+                >
+                  สมัครสมาชิก
+                </button>
+              </p>
+            </form>
+          )}
+
+          {/* Register Form */}
+          {tab === "register" && (
+            <form onSubmit={handleRegister} className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="reg-name" className="text-slate-700 text-sm">
+                  ชื่อที่แสดง <span className="text-red-400">*</span>
+                </Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input
+                    id="reg-name"
+                    placeholder="ชื่อที่ใช้แสดงในระบบ"
+                    value={regName}
+                    onChange={(e) => setRegName(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="reg-firstname" className="text-slate-700 text-sm">
+                    ชื่อจริง
+                  </Label>
+                  <Input
+                    id="reg-firstname"
+                    placeholder="ชื่อจริง"
+                    value={regFirstName}
+                    onChange={(e) => setRegFirstName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="reg-lastname" className="text-slate-700 text-sm">
+                    นามสกุล
+                  </Label>
+                  <Input
+                    id="reg-lastname"
+                    placeholder="นามสกุล"
+                    value={regLastName}
+                    onChange={(e) => setRegLastName(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="reg-email" className="text-slate-700 text-sm">
+                  อีเมล <span className="text-red-400">*</span>
+                </Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input
+                    id="reg-email"
+                    type="email"
+                    placeholder="email@university.ac.th"
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
+                    className="pl-9"
+                    autoComplete="email"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="reg-password" className="text-slate-700 text-sm">
+                  รหัสผ่าน <span className="text-red-400">*</span>
+                </Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input
+                    id="reg-password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="อย่างน้อย 8 ตัว มีตัวพิมพ์ใหญ่และตัวเลข"
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    className="pl-9 pr-9"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    onClick={() => setShowPassword((v) => !v)}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400">
+                  ต้องมีตัวพิมพ์ใหญ่ ตัวพิมพ์เล็ก และตัวเลข อย่างน้อย 8 ตัวอักษร
+                </p>
+              </div>
+
+              <Button type="submit" disabled={loading} className="w-full" size="lg">
+                {loading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <UserPlus className="w-4 h-4 mr-2" />
+                )}
+                สมัครสมาชิก
+              </Button>
+
+              <p className="text-center text-xs text-slate-400">
+                มีบัญชีแล้ว?{" "}
+                <button
+                  type="button"
+                  onClick={() => setTab("login")}
+                  className="text-primary hover:underline font-medium"
+                >
+                  เข้าสู่ระบบ
+                </button>
+              </p>
+            </form>
+          )}
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-6">

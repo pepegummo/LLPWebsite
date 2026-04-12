@@ -1,47 +1,57 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { Notification } from "@/types";
-import { mockNotifications } from "@/lib/mockData";
+import { api } from "@/lib/api";
+import { mapNotification } from "@/lib/mappers";
 
 interface NotificationState {
   notifications: Notification[];
+  isLoading: boolean;
+  fetchNotifications: () => Promise<void>;
   addNotification: (notification: Notification) => void;
-  markAsRead: (notificationId: string) => void;
-  markAllAsRead: (userId: string) => void;
+  markAsRead: (notificationId: string) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
   getNotificationsByUser: (userId: string) => Notification[];
   getUnreadCount: (userId: string) => number;
 }
 
-export const useNotificationStore = create<NotificationState>()(
-  persist(
-    (set, get) => ({
-      notifications: mockNotifications,
-      addNotification: (notification) =>
-        set((state) => ({
-          notifications: [...state.notifications, notification],
-        })),
-      markAsRead: (notificationId) =>
-        set((state) => ({
-          notifications: state.notifications.map((n) =>
-            n.id === notificationId ? { ...n, read: true } : n
-          ),
-        })),
-      markAllAsRead: (userId) =>
-        set((state) => ({
-          notifications: state.notifications.map((n) =>
-            n.userId === userId ? { ...n, read: true } : n
-          ),
-        })),
-      getNotificationsByUser: (userId) =>
-        get().notifications.filter((n) => n.userId === userId),
-      getUnreadCount: (userId) =>
-        get().notifications.filter((n) => n.userId === userId && !n.read)
-          .length,
-    }),
-    {
-      name: "notification-storage",
+export const useNotificationStore = create<NotificationState>()((set, get) => ({
+  notifications: [],
+  isLoading: false,
+
+  fetchNotifications: async () => {
+    set({ isLoading: true });
+    try {
+      const raw = await api.notifications.list();
+      set({ notifications: (raw as object[]).map(mapNotification) });
+    } finally {
+      set({ isLoading: false });
     }
-  )
-);
+  },
+
+  addNotification: (notification) =>
+    set((s) => ({ notifications: [notification, ...s.notifications] })),
+
+  markAsRead: async (notificationId) => {
+    await api.notifications.markRead(notificationId);
+    set((s) => ({
+      notifications: s.notifications.map((n) =>
+        n.id === notificationId ? { ...n, read: true } : n
+      ),
+    }));
+  },
+
+  markAllAsRead: async () => {
+    await api.notifications.markAllRead();
+    set((s) => ({
+      notifications: s.notifications.map((n) => ({ ...n, read: true })),
+    }));
+  },
+
+  getNotificationsByUser: (userId) =>
+    get().notifications.filter((n) => n.userId === userId),
+
+  getUnreadCount: (userId) =>
+    get().notifications.filter((n) => n.userId === userId && !n.read).length,
+}));

@@ -30,8 +30,13 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — ignore real env files, keep example templates
 .env*
+!*.example
+
+# playwright
+test-results/
+playwright-report/
 
 # vercel
 .vercel
