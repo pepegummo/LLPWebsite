@@ -90,7 +90,7 @@ export default function StudentNotificationsPage() {
   const unreadCount = userNotifications.filter((n) => !n.read).length;
 
   const handleMarkAllRead = () => {
-    markAllAsRead(currentUser.id);
+    markAllAsRead();
     toast.success("อ่านทั้งหมดแล้ว");
   };
 

@@ -94,7 +94,7 @@ export default function StudentSetupPage() {
       toast.error(`น้ำหนักรวมต้องเท่ากับ 100 (ปัจจุบัน: ${totalWeight})`);
       return;
     }
-    setWeights(localWeights);
+    setWeights(activeTeam.id, localWeights);
     toast.success("บันทึกค่าน้ำหนัก Rubric แล้ว");
   };
 
@@ -109,12 +109,7 @@ export default function StudentSetupPage() {
       toast.error("กรุณากรอกชื่อ tag");
       return;
     }
-    addTag({
-      id: generateId(),
-      teamId: activeTeam.id,
-      name: newTagName.trim(),
-      color: newTagColor,
-    });
+    addTag(activeTeam.id, newTagName.trim(), newTagColor);
     setNewTagName("");
     toast.success(`เพิ่ม tag "${newTagName.trim()}" แล้ว`);
   };

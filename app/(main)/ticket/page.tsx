@@ -95,13 +95,7 @@ export default function StudentTicketPage() {
   const handleSendReply = (ticketId: string) => {
     const content = replyContent[ticketId]?.trim();
     if (!content) return;
-    addMessage(ticketId, {
-      id: generateId(),
-      ticketId,
-      senderId: currentUser.id,
-      content,
-      createdAt: new Date().toISOString(),
-    });
+    addMessage(ticketId, content);
     setReplyContent((prev) => ({ ...prev, [ticketId]: "" }));
     toast.success("ส่งข้อความแล้ว");
   };

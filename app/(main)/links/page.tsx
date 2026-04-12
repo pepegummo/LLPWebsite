@@ -112,12 +112,7 @@ export default function StudentLinksPage() {
       toast.error("มี tag นี้แล้ว");
       return;
     }
-    addTag({
-      id: generateId(),
-      teamId: activeTeamId,
-      name: newTagName.trim(),
-      color: getNextColor(activeTeamId),
-    });
+    addTag(activeTeamId, newTagName.trim(), getNextColor(activeTeamId));
     setNewTagName("");
     toast.success("เพิ่ม tag แล้ว");
   };

@@ -150,7 +150,7 @@ export function EvaluationForm({ evaluatee, teamId }: EvaluationFormProps) {
         comment: comment.trim(),
         submittedAt: new Date().toISOString(),
       };
-      addEvaluation(evaluation);
+      addEvaluation(evaluation as unknown as Record<string, unknown>);
       toast.success(`ประเมิน ${evaluateeName} แล้ว`);
     }
   };

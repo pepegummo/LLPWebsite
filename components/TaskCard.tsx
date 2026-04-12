@@ -395,7 +395,7 @@ export function TaskCard({ task }: TaskCardProps) {
           open={editOpen}
           onClose={() => setEditOpen(false)}
           onSave={(t) => {
-            updateTask(t);
+            updateTask(t.id, t as unknown as Record<string, unknown>);
             if (currentUser) {
               addLog({
                 id: Math.random().toString(36).substring(2, 11),

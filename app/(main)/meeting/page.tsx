@@ -170,7 +170,7 @@ export default function StudentMeetingPage() {
         datetime: new Date(form.datetime).toISOString(),
         notificationSettings: form.notificationSettings,
       };
-      updateMeeting(updated);
+      updateMeeting(updated.id, updated as unknown as Record<string, unknown>);
       toast.success("แก้ไขการประชุมแล้ว");
     } else {
       const meeting: Meeting = {
@@ -185,7 +185,7 @@ export default function StudentMeetingPage() {
         createdBy: currentUser.id,
         createdAt: new Date().toISOString(),
       };
-      addMeeting(meeting);
+      addMeeting(meeting as unknown as Record<string, unknown>);
 
       form.attendeeIds.forEach((userId) => {
         if (userId === currentUser.id) return;

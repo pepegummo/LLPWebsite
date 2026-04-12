@@ -88,7 +88,7 @@ export const api = {
     addAdmin: (wsId: string, userId: string) =>
       post<void>(`/api/workspaces/${wsId}/admins`, { userId }),
     removeAdmin: (wsId: string, userId: string) =>
-      del<void>(`/api/workspaces/${wsId}/admins/${userId}`),
+      del(`/api/workspaces/${wsId}/admins/${userId}`),
     listProjects: (wsId: string) => get<unknown[]>(`/api/workspaces/${wsId}/projects`),
   },
 

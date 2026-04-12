@@ -215,7 +215,7 @@ export function KanbanBoard({ teamId }: KanbanBoardProps) {
           open={addOpen}
           onClose={() => setAddOpen(false)}
           onSave={(task) => {
-            addTask(task);
+            addTask(task as unknown as Record<string, unknown>);
             if (currentUser) {
               addLog({
                 id: Math.random().toString(36).substring(2, 11),

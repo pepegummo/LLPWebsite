@@ -161,7 +161,7 @@ export default function StudentTeamPage() {
         (minId, id) => memberHours[id] < memberHours[minId] ? id : minId,
         memberIds[0]
       );
-      updateTask({ ...task, assigneeIds: [leastLoaded] });
+      updateTask(task.id, { assigneeIds: [leastLoaded] });
       memberHours[leastLoaded] += task.manHours ?? 1;
     });
 

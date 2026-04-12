@@ -131,7 +131,7 @@ export function NotificationPanel() {
               {count > 0 && (
                 <button
                   onClick={() => {
-                    markAllAsRead(currentUser.id);
+                    markAllAsRead();
                     toast.success("อ่านทั้งหมดแล้ว");
                   }}
                   title="อ่านทั้งหมด"
