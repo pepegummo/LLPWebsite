@@ -29,11 +29,12 @@ const CRITERIA_LABELS: { key: keyof EvaluationCriteria; label: string }[] = [
 
 function computeWeightedScore(
   criteria: EvaluationCriteria,
-  weights: Record<keyof EvaluationCriteria, number>
+  weights: Record<string, unknown>
 ): 1 | 2 | 3 | 4 | 5 {
-  const totalWeight = Object.values(weights).reduce((s, w) => s + w, 0) || 100;
+  const totalWeight =
+    CRITERIA_LABELS.reduce((s, { key }) => s + ((weights[key] as number) || 0), 0) || 100;
   const weighted = CRITERIA_LABELS.reduce((s, { key }) => {
-    return s + (criteria[key] * weights[key]) / totalWeight;
+    return s + (criteria[key] * ((weights[key] as number) || 0)) / totalWeight;
   }, 0);
   return Math.min(5, Math.max(1, Math.round(weighted))) as 1 | 2 | 3 | 4 | 5;
 }
@@ -74,6 +75,7 @@ function CriteriaStars({
 interface EvaluationFormProps {
   evaluatee: User;
   teamId: string;
+  workspaceId: string;
 }
 
 const EMPTY_CRITERIA: EvaluationCriteria = {
@@ -85,11 +87,12 @@ const EMPTY_CRITERIA: EvaluationCriteria = {
   effort: 0,
 };
 
-export function EvaluationForm({ evaluatee, teamId }: EvaluationFormProps) {
+export function EvaluationForm({ evaluatee, teamId, workspaceId }: EvaluationFormProps) {
   const { currentUser } = useAuthStore();
   const { addEvaluation, updateEvaluation, hasEvaluated, evaluations } =
     useEvaluationStore();
-  const { weights } = useRubricStore();
+  const { getWeights } = useRubricStore();
+  const weights = getWeights(workspaceId);
   const resolveDisplayName = useDisplayName();
   const evaluateeName = resolveDisplayName(evaluatee.id, evaluatee.name, teamId);
 
@@ -251,7 +254,7 @@ export function EvaluationForm({ evaluatee, teamId }: EvaluationFormProps) {
               <div className="flex items-center justify-between">
                 <Label className="text-xs">{label}</Label>
                 <span className="text-xs text-muted-foreground">
-                  {weights[key]}%
+                  {weights[key] as number}%
                 </span>
               </div>
               <CriteriaStars

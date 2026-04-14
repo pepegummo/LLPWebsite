@@ -34,8 +34,12 @@ import {
   AtSign,
   MessageCircle,
   Share2,
+  KeyRound,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 
 const CONTACT_TYPES: ContactType[] = ["Email", "Facebook", "IG", "Line", "Discord", "Phone"];
 
@@ -81,6 +85,14 @@ export default function ProfilePage() {
   const [editDisplayNameTeamId, setEditDisplayNameTeamId] = useState<string | null>(null);
   const [displayNameDraft, setDisplayNameDraft] = useState("");
 
+  // Password change
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+
   const userTeams = teams.filter((t) => t.members.some((m) => m.userId === currentUser.id));
 
   const availableContactTypes = CONTACT_TYPES.filter(
@@ -117,6 +129,33 @@ export default function ProfilePage() {
     }));
   };
 
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword) {
+      toast.error("กรุณากรอกรหัสผ่านให้ครบ");
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error("รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("รหัสผ่านใหม่ไม่ตรงกัน");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await api.users.changePassword(currentPassword, newPassword);
+      toast.success("เปลี่ยนรหัสผ่านสำเร็จ");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "เปลี่ยนรหัสผ่านไม่สำเร็จ");
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   const handleSaveDisplayName = () => {
     if (!editDisplayNameTeamId) return;
     setForm((prev) => ({
@@ -136,6 +175,27 @@ export default function ProfilePage() {
         <UserCircle className="w-6 h-6" />
         ข้อมูลส่วนตัว
       </h1>
+
+      {/* Account Info */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Mail className="w-4 h-4" />
+            บัญชีผู้ใช้
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="space-y-1.5">
+            <Label className="text-muted-foreground text-xs">Gmail (ไม่สามารถเปลี่ยนได้)</Label>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-muted/40">
+              <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+              <span className="text-sm text-muted-foreground select-all">
+                {currentUser.email ?? "—"}
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Basic Info */}
       <Card>
@@ -267,6 +327,75 @@ export default function ProfilePage() {
         <Save className="w-4 h-4" />
         บันทึกข้อมูลส่วนตัว
       </Button>
+
+      {/* Password Change */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <KeyRound className="w-4 h-4" />
+            เปลี่ยนรหัสผ่าน
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>รหัสผ่านปัจจุบัน</Label>
+            <div className="relative">
+              <Input
+                type={showCurrentPw ? "text" : "password"}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="รหัสผ่านปัจจุบัน"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowCurrentPw((v) => !v)}
+              >
+                {showCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)</Label>
+            <div className="relative">
+              <Input
+                type={showNewPw ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="รหัสผ่านใหม่"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowNewPw((v) => !v)}
+              >
+                {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>ยืนยันรหัสผ่านใหม่</Label>
+            <Input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="ยืนยันรหัสผ่านใหม่"
+              onKeyDown={(e) => e.key === "Enter" && handleChangePassword()}
+            />
+          </div>
+          <Button
+            onClick={handleChangePassword}
+            disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}
+            variant="outline"
+            className="gap-2"
+          >
+            <KeyRound className="w-4 h-4" />
+            {changingPassword ? "กำลังเปลี่ยน..." : "เปลี่ยนรหัสผ่าน"}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Add Contact Dialog */}
       <Dialog open={showAddContact} onOpenChange={setShowAddContact}>

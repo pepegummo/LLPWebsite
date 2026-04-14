@@ -6,8 +6,11 @@ import {
   useWorkspaceStore,
   useProjectStore,
   useTeamStore,
+  useRubricStore,
+  DEFAULT_RUBRIC_WEIGHTS,
 } from "@/store";
 import { useProfileStore } from "@/store/profileStore";
+import { RubricWeights } from "@/types";
 import { WORKSPACE_ROLE_COLORS, WORKSPACE_ROLE_LABELS } from "@/lib/badge-constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,9 +46,16 @@ import {
   UserPlus,
   X,
   Loader2,
+  Link2,
+  Copy,
+  Check,
+  Mail,
+  Sliders,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 
 export default function WorkspacePage() {
   const { currentUser, updateCurrentUser } = useAuthStore();
@@ -62,6 +72,12 @@ export default function WorkspacePage() {
   const { projects, fetchProjects, createProject, deleteProject, getProjectsByWorkspace } = useProjectStore();
   const { teams, fetchMyTeams, createTeam, deleteTeam, getUserRole, getTeamsByUser } = useTeamStore();
   const { getProfile, fetchProfile } = useProfileStore();
+  const { fetchRubric, setWeights, getWeights } = useRubricStore();
+
+  // Rubric state (per workspace being edited)
+  const [rubricWsId, setRubricWsId] = useState<string | null>(null);
+  const [localRubric, setLocalRubric] = useState<RubricWeights>({ ...DEFAULT_RUBRIC_WEIGHTS });
+  const [savingRubric, setSavingRubric] = useState(false);
 
   // Dialogs
   const [newWsOpen, setNewWsOpen] = useState(false);
@@ -69,7 +85,19 @@ export default function WorkspacePage() {
   const [newTeamOpen, setNewTeamOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ type: "workspace" | "project" | "team"; id: string; name: string } | null>(null);
   const [manageAdminWsId, setManageAdminWsId] = useState<string | null>(null);
-  const [adminUserIdInput, setAdminUserIdInput] = useState("");
+  const [adminEmailInput, setAdminEmailInput] = useState("");
+  const [adminSearching, setAdminSearching] = useState(false);
+
+  // Invite link state
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [inviteTarget, setInviteTarget] = useState<{ type: "workspace" | "project" | "team"; id: string; name: string } | null>(null);
+
+  // Project admin
+  const [manageProjAdminId, setManageProjAdminId] = useState<string | null>(null);
+  const [projAdminEmail, setProjAdminEmail] = useState("");
+  const [projAdminSearching, setProjAdminSearching] = useState(false);
 
   // Form state
   const [wsName, setWsName] = useState("");
@@ -95,6 +123,24 @@ export default function WorkspacePage() {
       if (!getProfile(id)) fetchProfile(id).catch(() => {});
     });
   }, [workspaces, getProfile, fetchProfile]);
+
+  // Fetch profiles for all team members
+  useEffect(() => {
+    const allMemberIds = teams.flatMap((t) => t.members.map((m) => m.userId));
+    const unique = [...new Set(allMemberIds)];
+    unique.forEach((id) => {
+      if (!getProfile(id)) fetchProfile(id).catch(() => {});
+    });
+  }, [teams, getProfile, fetchProfile]);
+
+  // Load rubric into local state when opening the rubric dialog
+  useEffect(() => {
+    if (rubricWsId) {
+      fetchRubric(rubricWsId).catch(() => {});
+      setLocalRubric({ ...getWeights(rubricWsId) });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rubricWsId]);
 
   if (!currentUser) return null;
 
@@ -189,23 +235,66 @@ export default function WorkspacePage() {
   };
 
   const handleAddAdmin = async () => {
-    if (!manageAdminWsId || !adminUserIdInput.trim()) return;
-    const ws = workspaces.find((w) => w.id === manageAdminWsId);
-    if (!ws) return;
-    if (ws.ownerId === adminUserIdInput.trim()) {
-      toast.error("ผู้ใช้นี้เป็น Owner อยู่แล้ว");
-      return;
-    }
-    setSaving(true);
+    if (!manageAdminWsId || !adminEmailInput.trim()) return;
+    setAdminSearching(true);
     try {
-      await addAdmin(manageAdminWsId, adminUserIdInput.trim());
-      setAdminUserIdInput("");
+      const result = await api.workspaces.addAdminByEmail(manageAdminWsId, adminEmailInput.trim());
+      await addAdmin(manageAdminWsId, result.userId);
+      setAdminEmailInput("");
       toast.success("แต่งตั้ง Workspace Admin แล้ว");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "แต่งตั้ง Admin ไม่สำเร็จ");
     } finally {
-      setSaving(false);
+      setAdminSearching(false);
     }
+  };
+
+  const handleAddProjectAdmin = async () => {
+    if (!manageProjAdminId || !projAdminEmail.trim()) return;
+    setProjAdminSearching(true);
+    try {
+      await api.projects.addAdminByEmail(manageProjAdminId, projAdminEmail.trim());
+      setProjAdminEmail("");
+      toast.success("แต่งตั้ง Project Admin แล้ว");
+      // Refresh projects
+      managedWorkspaces.forEach((ws) => fetchProjects(ws.id));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "แต่งตั้ง Project Admin ไม่สำเร็จ");
+    } finally {
+      setProjAdminSearching(false);
+    }
+  };
+
+  const handleGenerateInviteLink = async () => {
+    if (!inviteTarget) return;
+    setGeneratingLink(true);
+    try {
+      let token: string;
+      if (inviteTarget.type === "workspace") {
+        const res = await api.workspaces.createInviteLink(inviteTarget.id);
+        token = res.token;
+      } else if (inviteTarget.type === "project") {
+        const res = await api.projects.createInviteLink(inviteTarget.id);
+        token = res.token;
+      } else {
+        const res = await api.teams.createInviteLink(inviteTarget.id);
+        token = res.token;
+      }
+      const link = `${window.location.origin}/invite/${inviteTarget.type}/${token}`;
+      setInviteLink(link);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "สร้าง Invite Link ไม่สำเร็จ");
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!inviteLink) return;
+    await navigator.clipboard.writeText(inviteLink);
+    setInviteLinkCopied(true);
+    toast.success("คัดลอก Invite Link แล้ว");
+    setTimeout(() => setInviteLinkCopied(false), 2000);
   };
 
   const handleRemoveAdmin = async (wsId: string, userId: string) => {
@@ -217,11 +306,39 @@ export default function WorkspacePage() {
     }
   };
 
+  const RUBRIC_CRITERIA: { key: keyof Omit<RubricWeights, "enabled">; label: string }[] = [
+    { key: "contribution", label: "Contribution (การมีส่วนร่วม)" },
+    { key: "qualityOfWork", label: "Quality of Work (คุณภาพงาน)" },
+    { key: "responsibility", label: "Responsibility (ความรับผิดชอบ)" },
+    { key: "communication", label: "Communication (การสื่อสาร)" },
+    { key: "teamwork", label: "Teamwork (การทำงานเป็นทีม)" },
+    { key: "effort", label: "Effort (ความพยายาม)" },
+  ];
+
+  const handleSaveRubric = async () => {
+    if (!rubricWsId) return;
+    const total = RUBRIC_CRITERIA.reduce((s, { key }) => s + (localRubric[key] as number), 0);
+    if (localRubric.enabled && total !== 100) {
+      toast.error(`น้ำหนักรวมต้องเท่ากับ 100 (ปัจจุบัน: ${total})`);
+      return;
+    }
+    setSavingRubric(true);
+    try {
+      await setWeights(rubricWsId, localRubric);
+      toast.success("บันทึกการตั้งค่า Rubric แล้ว");
+      setRubricWsId(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
+    } finally {
+      setSavingRubric(false);
+    }
+  };
+
   const getAdminDisplayName = (userId: string) => {
     const profile = getProfile(userId);
     return profile
-      ? profile.displayNames[Object.keys(profile.displayNames)[0]] ||
-          [profile.firstName, profile.lastName].filter(Boolean).join(" ") ||
+      ? [profile.firstName, profile.lastName].filter(Boolean).join(" ") ||
+          profile.name ||
           userId
       : userId;
   };
@@ -341,16 +458,36 @@ export default function WorkspacePage() {
                     </CardTitle>
                     <div className="flex items-center gap-1">
                       {isOwner && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs text-muted-foreground hover:text-primary"
-                          onClick={() => { setManageAdminWsId(ws.id); setAdminUserIdInput(""); }}
-                        >
-                          <Shield className="w-3.5 h-3.5 mr-1" />
-                          จัดการ Admin
-                        </Button>
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-muted-foreground hover:text-primary"
+                            onClick={() => { setManageAdminWsId(ws.id); setAdminEmailInput(""); }}
+                          >
+                            <Shield className="w-3.5 h-3.5 mr-1" />
+                            จัดการ Admin
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-muted-foreground hover:text-primary"
+                            onClick={() => setRubricWsId(ws.id)}
+                          >
+                            <Sliders className="w-3.5 h-3.5 mr-1" />
+                            Rubric
+                          </Button>
+                        </>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-muted-foreground hover:text-primary"
+                        onClick={() => { setInviteTarget({ type: "workspace", id: ws.id, name: ws.name }); setInviteLink(null); }}
+                      >
+                        <Link2 className="w-3.5 h-3.5 mr-1" />
+                        เชิญ
+                      </Button>
                       {isOwner && (
                         <Button
                           variant="ghost"
@@ -395,23 +532,45 @@ export default function WorkspacePage() {
                       return (
                         <div key={proj.id} className="border border-border rounded-lg p-3 space-y-2">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <FolderOpen className="w-4 h-4 text-muted-foreground" />
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" />
                               <span className="font-medium text-sm">{proj.name}</span>
                               {proj.description && (
-                                <span className="text-xs text-muted-foreground">— {proj.description}</span>
+                                <span className="text-xs text-muted-foreground truncate">— {proj.description}</span>
                               )}
                             </div>
-                            {canManageProject && (
+                            <div className="flex items-center gap-1 shrink-0">
+                              {canManageProject && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-xs text-muted-foreground hover:text-primary px-2"
+                                  onClick={() => { setManageProjAdminId(proj.id); setProjAdminEmail(""); }}
+                                >
+                                  <Shield className="w-3 h-3 mr-1" />
+                                  Admin
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                                onClick={() => setDeleteTarget({ type: "project", id: proj.id, name: proj.name })}
+                                size="sm"
+                                className="h-6 text-xs text-muted-foreground hover:text-primary px-2"
+                                onClick={() => { setInviteTarget({ type: "project", id: proj.id, name: proj.name }); setInviteLink(null); }}
                               >
-                                <Trash2 className="w-3 h-3" />
+                                <Link2 className="w-3 h-3 mr-1" />
+                                เชิญ
                               </Button>
-                            )}
+                              {canManageProject && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                  onClick={() => setDeleteTarget({ type: "project", id: proj.id, name: proj.name })}
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              )}
+                            </div>
                           </div>
 
                           <div className="pl-6 space-y-1.5">
@@ -419,26 +578,58 @@ export default function WorkspacePage() {
                               const myRole = getUserRole(team.id, currentUser.id);
                               const isThisLeader = myRole === "team_leader";
                               return (
-                                <div key={team.id} className="flex items-center justify-between bg-muted/40 rounded-md px-3 py-1.5">
-                                  <div className="flex items-center gap-2">
-                                    <Users className="w-3.5 h-3.5 text-muted-foreground" />
-                                    <span className="text-sm">{team.name}</span>
-                                    <span className="text-xs text-muted-foreground">{team.members.length} สมาชิก</span>
-                                    {myRole && (
-                                      <Badge variant="outline" className="text-xs">
-                                        {myRole === "team_leader" ? "Leader" : myRole === "assistant_leader" ? "Asst." : "Member"}
-                                      </Badge>
-                                    )}
+                                <div key={team.id} className="bg-muted/40 rounded-md px-3 py-2 space-y-1.5">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                                      <span className="text-sm font-medium">{team.name}</span>
+                                      {myRole && (
+                                        <Badge variant="outline" className="text-xs">
+                                          {myRole === "team_leader" ? "Leader" : myRole === "assistant_leader" ? "Asst." : "Member"}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 text-xs text-muted-foreground hover:text-primary px-2"
+                                        onClick={() => { setInviteTarget({ type: "team", id: team.id, name: team.name }); setInviteLink(null); }}
+                                      >
+                                        <Link2 className="w-3 h-3 mr-1" />
+                                        เชิญ
+                                      </Button>
+                                      {isThisLeader && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                          onClick={() => setDeleteTarget({ type: "team", id: team.id, name: team.name })}
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </Button>
+                                      )}
+                                    </div>
                                   </div>
-                                  {isThisLeader && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                                      onClick={() => setDeleteTarget({ type: "team", id: team.id, name: team.name })}
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </Button>
+                                  {/* Show all members */}
+                                  {team.members.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 pl-5">
+                                      {team.members.map((m) => {
+                                        const profile = getProfile(m.userId);
+                                        const name = profile
+                                          ? profile.displayNames?.[team.id] ||
+                                            [profile.firstName, profile.lastName].filter(Boolean).join(" ") ||
+                                            profile.name ||
+                                            m.userId
+                                          : m.userId;
+                                        return (
+                                          <span key={m.userId} className="text-xs bg-background border border-border rounded px-1.5 py-0.5">
+                                            {name}
+                                            {m.role === "team_leader" && " 👑"}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
                                   )}
                                 </div>
                               );
@@ -509,16 +700,17 @@ export default function WorkspacePage() {
             )}
 
             <div className="space-y-1.5 border-t border-border pt-3">
-              <Label>แต่งตั้ง Admin ใหม่ (User ID)</Label>
+              <Label>แต่งตั้ง Admin ใหม่ (Gmail)</Label>
               <div className="flex gap-2">
                 <Input
-                  value={adminUserIdInput}
-                  onChange={(e) => setAdminUserIdInput(e.target.value)}
-                  placeholder="ใส่ User ID..."
+                  type="email"
+                  value={adminEmailInput}
+                  onChange={(e) => setAdminEmailInput(e.target.value)}
+                  placeholder="example@gmail.com"
                   onKeyDown={(e) => { if (e.key === "Enter") handleAddAdmin(); }}
                 />
-                <Button onClick={handleAddAdmin} disabled={!adminUserIdInput.trim() || saving}>
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                <Button onClick={handleAddAdmin} disabled={!adminEmailInput.trim() || adminSearching}>
+                  {adminSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
                 </Button>
               </div>
             </div>
@@ -639,6 +831,110 @@ export default function WorkspacePage() {
         </DialogContent>
       </Dialog>
 
+      {/* Project Admin Dialog */}
+      <Dialog open={!!manageProjAdminId} onOpenChange={(v) => { if (!v) setManageProjAdminId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-violet-500" />
+              จัดการ Project Admin — {projects.find((p) => p.id === manageProjAdminId)?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {(() => {
+              const proj = projects.find((p) => p.id === manageProjAdminId);
+              const adminIds = proj?.adminIds ?? [];
+              return adminIds.length > 0 ? (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Project Admin ปัจจุบัน</Label>
+                  {adminIds.map((uid) => (
+                    <div key={uid} className="flex items-center justify-between border border-border rounded-md px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-3.5 h-3.5 text-violet-500" />
+                        <span className="text-sm">{getAdminDisplayName(uid)}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 hover:text-destructive"
+                        onClick={async () => {
+                          try {
+                            await api.projects.removeAdmin(manageProjAdminId!, uid);
+                            managedWorkspaces.forEach((ws) => fetchProjects(ws.id));
+                            toast.success("ถอด Project Admin แล้ว");
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : "ถอด Admin ไม่สำเร็จ");
+                          }
+                        }}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">ยังไม่มี Project Admin</p>
+              );
+            })()}
+            <div className="space-y-1.5 border-t border-border pt-3">
+              <Label>แต่งตั้ง Project Admin (Gmail)</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  value={projAdminEmail}
+                  onChange={(e) => setProjAdminEmail(e.target.value)}
+                  placeholder="example@gmail.com"
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddProjectAdmin(); }}
+                />
+                <Button onClick={handleAddProjectAdmin} disabled={!projAdminEmail.trim() || projAdminSearching}>
+                  {projAdminSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                </Button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setManageProjAdminId(null)}>ปิด</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invite Link Dialog */}
+      <Dialog open={!!inviteTarget} onOpenChange={(v) => { if (!v) { setInviteTarget(null); setInviteLink(null); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="w-4 h-4 text-primary" />
+              เชิญเข้า{inviteTarget?.type === "workspace" ? " Workspace" : inviteTarget?.type === "project" ? " Project" : "ทีม"} — {inviteTarget?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              สร้าง Invite Link เพื่อแชร์ให้ผู้อื่น เมื่อคลิก Link จะเข้าร่วมอัตโนมัติ
+            </p>
+            {!inviteLink ? (
+              <Button onClick={handleGenerateInviteLink} disabled={generatingLink} className="w-full">
+                {generatingLink ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Link2 className="w-4 h-4 mr-2" />}
+                สร้าง Invite Link
+              </Button>
+            ) : (
+              <div className="space-y-2">
+                <Label>Invite Link</Label>
+                <div className="flex gap-2">
+                  <Input value={inviteLink} readOnly className="text-xs" />
+                  <Button variant="outline" size="icon" onClick={handleCopyLink}>
+                    {inviteLinkCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Link นี้สามารถใช้ได้หลายครั้ง</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setInviteTarget(null); setInviteLink(null); }}>ปิด</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
@@ -661,6 +957,96 @@ export default function WorkspacePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Rubric Weights Dialog */}
+      <Dialog open={!!rubricWsId} onOpenChange={(v) => { if (!v) setRubricWsId(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-primary" />
+              ค่าน้ำหนัก Rubric — {workspaces.find((w) => w.id === rubricWsId)?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Enable/disable toggle */}
+            <div className="flex items-center justify-between border border-border rounded-lg px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">เปิดใช้งานการประเมิน Rubric</p>
+                <p className="text-xs text-muted-foreground">หากปิด สมาชิกจะไม่ถูกถามเรื่องน้ำหนักเกณฑ์</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLocalRubric((r) => ({ ...r, enabled: !r.enabled }))}
+                className={cn(
+                  "relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors",
+                  localRubric.enabled ? "bg-primary" : "bg-muted"
+                )}
+              >
+                <span
+                  className={cn(
+                    "inline-block h-5 w-5 rounded-full bg-white shadow transition-transform mt-0.5",
+                    localRubric.enabled ? "translate-x-5" : "translate-x-0.5"
+                  )}
+                />
+              </button>
+            </div>
+
+            {/* Weight inputs — only shown when enabled */}
+            {localRubric.enabled && (
+              <div className="space-y-3">
+                {RUBRIC_CRITERIA.map(({ key, label }) => (
+                  <div key={key} className="flex items-center gap-3">
+                    <Label className="flex-1 text-sm">{label}</Label>
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={localRubric[key] as number}
+                        onChange={(e) =>
+                          setLocalRubric((r) => ({ ...r, [key]: parseInt(e.target.value) || 0 }))
+                        }
+                        className="w-20 text-right"
+                      />
+                      <span className="text-sm text-muted-foreground w-4">%</span>
+                    </div>
+                  </div>
+                ))}
+
+                {(() => {
+                  const total = RUBRIC_CRITERIA.reduce((s, { key }) => s + (localRubric[key] as number), 0);
+                  return (
+                    <div className={cn(
+                      "flex items-center justify-between p-3 rounded-md text-sm",
+                      total === 100 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                    )}>
+                      <span>ผลรวมน้ำหนัก</span>
+                      <span className="font-semibold">{total}%</span>
+                    </div>
+                  );
+                })()}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setLocalRubric({ ...DEFAULT_RUBRIC_WEIGHTS, enabled: true })}
+                >
+                  <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                  รีเซ็ตเป็นค่าเริ่มต้น
+                </Button>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRubricWsId(null)}>ยกเลิก</Button>
+            <Button onClick={handleSaveRubric} disabled={savingRubric}>
+              {savingRubric ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              บันทึก
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

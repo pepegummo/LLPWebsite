@@ -10,6 +10,7 @@ interface AuthState {
   loginWithCredentials: (email: string, password: string) => Promise<void>;
   logout: () => void;
   updateCurrentUser: (user: User) => void;
+  setActiveWorkspace: (workspaceId: string | null) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -37,6 +38,13 @@ export const useAuthStore = create<AuthState>()(
       },
 
       updateCurrentUser: (user) => set({ currentUser: user }),
+
+      setActiveWorkspace: (workspaceId) =>
+        set((s) => ({
+          currentUser: s.currentUser
+            ? { ...s.currentUser, activeWorkspaceId: workspaceId }
+            : null,
+        })),
     }),
     { name: "auth-storage" }
   )

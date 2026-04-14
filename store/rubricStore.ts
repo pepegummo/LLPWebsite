@@ -6,39 +6,36 @@ import { api } from "@/lib/api";
 import { mapRubric } from "@/lib/mappers";
 
 export const DEFAULT_RUBRIC_WEIGHTS: RubricWeights = {
-  contribution: 20,
-  qualityOfWork: 20,
-  responsibility: 30,
-  communication: 10,
-  teamwork: 10,
-  effort: 10,
+  enabled: false,
+  contribution: 16.67,
+  qualityOfWork: 16.67,
+  responsibility: 16.67,
+  communication: 16.67,
+  teamwork: 16.67,
+  effort: 16.65,
 };
 
 interface RubricState {
-  weightsByTeam: Record<string, RubricWeights>;
-  fetchRubric: (teamId: string) => Promise<void>;
-  setWeights: (teamId: string, weights: RubricWeights) => Promise<void>;
-  getWeights: (teamId: string) => RubricWeights;
-  // Legacy single-team accessors kept for compatibility
-  weights: RubricWeights;
-  resetWeights: () => void;
+  weightsByWorkspace: Record<string, RubricWeights>;
+  fetchRubric: (workspaceId: string) => Promise<void>;
+  setWeights: (workspaceId: string, weights: RubricWeights) => Promise<void>;
+  getWeights: (workspaceId: string) => RubricWeights;
 }
 
 export const useRubricStore = create<RubricState>()((set, get) => ({
-  weightsByTeam: {},
-  weights: DEFAULT_RUBRIC_WEIGHTS,
+  weightsByWorkspace: {},
 
-  fetchRubric: async (teamId) => {
-    const raw = await api.evaluations.getRubric(teamId);
+  fetchRubric: async (workspaceId) => {
+    const raw = await api.evaluations.getRubric(workspaceId);
     const weights = mapRubric(raw);
     set((s) => ({
-      weightsByTeam: { ...s.weightsByTeam, [teamId]: weights },
-      weights,
+      weightsByWorkspace: { ...s.weightsByWorkspace, [workspaceId]: weights },
     }));
   },
 
-  setWeights: async (teamId, weights) => {
-    await api.evaluations.updateRubric(teamId, {
+  setWeights: async (workspaceId, weights) => {
+    await api.evaluations.updateRubric(workspaceId, {
+      enabled: weights.enabled,
       contribution: weights.contribution,
       qualityOfWork: weights.qualityOfWork,
       responsibility: weights.responsibility,
@@ -47,13 +44,10 @@ export const useRubricStore = create<RubricState>()((set, get) => ({
       effort: weights.effort,
     });
     set((s) => ({
-      weightsByTeam: { ...s.weightsByTeam, [teamId]: weights },
-      weights,
+      weightsByWorkspace: { ...s.weightsByWorkspace, [workspaceId]: weights },
     }));
   },
 
-  getWeights: (teamId) =>
-    get().weightsByTeam[teamId] ?? DEFAULT_RUBRIC_WEIGHTS,
-
-  resetWeights: () => set({ weights: DEFAULT_RUBRIC_WEIGHTS }),
+  getWeights: (workspaceId) =>
+    get().weightsByWorkspace[workspaceId] ?? DEFAULT_RUBRIC_WEIGHTS,
 }));

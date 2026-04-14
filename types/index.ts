@@ -7,6 +7,7 @@ export interface User {
   name: string;
   email?: string;
   activeTeamId?: string | null;
+  activeWorkspaceId?: string | null;
 }
 
 export interface TeamMember {
@@ -27,6 +28,7 @@ export interface Project {
   workspaceId: string;
   name: string;
   description?: string;
+  adminIds: string[];
   createdAt: string;
 }
 
@@ -143,6 +145,7 @@ export interface Evaluation {
 }
 
 export interface RubricWeights {
+  enabled: boolean;
   contribution: number;   // percentage, all sum to 100
   qualityOfWork: number;
   responsibility: number;
@@ -207,6 +210,7 @@ export interface Contact {
 
 export interface UserProfile {
   userId: string;
+  name: string;
   firstName: string;
   lastName: string;
   bio?: string;

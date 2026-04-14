@@ -1,36 +1,139 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LLP Frontend — LLPWebsite
 
-## Getting Started
+Next.js frontend สำหรับระบบจัดการโปรเจกต์และประเมินผลนักศึกษา
 
-First, run the development server:
+---
+
+## Tech Stack
+
+| Category | Library / Tool |
+|---|---|
+| Framework | Next.js 16.2 (App Router, Turbopack) |
+| Language | TypeScript 5 |
+| UI Components | shadcn/ui + Base UI |
+| Styling | Tailwind CSS v4 |
+| Icons | Lucide React |
+| State Management | Zustand v5 |
+| Drag & Drop | dnd-kit |
+| Notifications | Sonner |
+| Font | Geist |
+| E2E Testing | Playwright |
+
+---
+
+## How to Run
+
+### 1. ติดตั้ง Dependencies
+
+```bash
+npm install
+```
+
+### 2. ตั้งค่า Environment Variables
+
+สร้างไฟล์ `.env.local`:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3001
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+### 3. รัน Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+เปิด http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Build Production
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm run start
+```
 
-## Learn More
+### 5. รัน E2E Tests
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run test:e2e          # รันทั้งหมด
+npm run test:e2e:ui       # เปิด Playwright UI
+npm run test:e2e:report   # ดู report
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## File Structure
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+LLPWebsite/
+├── app/
+│   ├── (main)/                  # Layout หลัก (ต้อง login)
+│   │   ├── calendar/            # ปฏิทินการประชุม
+│   │   ├── chat/                # แชทภายในทีม
+│   │   ├── dashboard/           # ภาพรวมทีม + [groupId] สำหรับ staff
+│   │   ├── evaluation/          # ประเมิน peer evaluation
+│   │   ├── links/               # ลิงก์ทีม
+│   │   ├── meeting/             # จัดการประชุม
+│   │   ├── notifications/       # การแจ้งเตือน
+│   │   ├── profile/             # โปรไฟล์ผู้ใช้ + เปลี่ยนรหัสผ่าน
+│   │   ├── setup/               # ตั้งค่าทีม (tags)
+│   │   ├── tasks/               # Kanban Board
+│   │   ├── team/                # จัดการสมาชิกทีม
+│   │   ├── ticket/              # ระบบ ticket
+│   │   └── workspace/           # จัดการ workspace / project / team
+│   └── login/                   # หน้า login
+├── components/
+│   ├── layout/
+│   │   ├── Sidebar.tsx
+│   │   ├── TopBar.tsx
+│   │   ├── NotificationPanel.tsx
+│   │   ├── WorkspaceSwitcher.tsx
+│   │   └── GroupSwitcher.tsx
+│   ├── staff/                   # UI สำหรับ staff/อาจารย์
+│   │   ├── EvalResultsTable.tsx
+│   │   ├── GroupTable.tsx
+│   │   ├── InviteModal.tsx
+│   │   └── ProgressReportCard.tsx
+│   ├── skeleton/                # Loading skeletons
+│   ├── ui/                      # shadcn/ui components
+│   ├── EvaluationForm.tsx
+│   ├── KanbanBoard.tsx
+│   ├── KanbanColumn.tsx
+│   ├── TaskCard.tsx
+│   ├── TaskForm.tsx
+│   ├── InvitationCard.tsx
+│   └── WorkloadBar.tsx
+├── lib/
+│   ├── api.ts                   # ฟังก์ชัน fetch ทุก endpoint
+│   ├── mappers.ts               # แปลง snake_case (API) → camelCase (types)
+│   ├── utils.ts
+│   ├── badge-constants.ts
+│   └── useDisplayName.ts
+├── store/                       # Zustand stores
+│   ├── index.ts                 # re-export ทั้งหมด
+│   ├── authStore.ts
+│   ├── workspaceStore.ts
+│   ├── projectStore.ts
+│   ├── teamStore.ts
+│   ├── taskStore.ts
+│   ├── evaluationStore.ts
+│   ├── rubricStore.ts
+│   ├── profileStore.ts
+│   ├── notificationStore.ts
+│   ├── chatStore.ts
+│   ├── meetingStore.ts
+│   ├── tagStore.ts
+│   ├── ticketStore.ts
+│   ├── linkStore.ts
+│   ├── activityStore.ts
+│   └── groupStore.ts
+├── types/
+│   └── index.ts                 # TypeScript interfaces ทั้งหมด
+└── e2e/                         # Playwright E2E tests
+    ├── auth.spec.ts
+    ├── navigation.spec.ts
+    ├── tasks.spec.ts
+    └── workspace.spec.ts
+```

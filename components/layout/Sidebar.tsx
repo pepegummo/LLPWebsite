@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore, useTeamStore } from "@/store";
 import { useDisplayName } from "@/lib/useDisplayName";
 import { GroupSwitcher } from "./GroupSwitcher";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -170,6 +171,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             <p className="text-xs text-muted-foreground mt-1">{roleLabel()}</p>
           </div>
         )}
+
+        {/* Workspace switcher */}
+        <div className="border-b border-border shrink-0">
+          <WorkspaceSwitcher />
+        </div>
 
         {/* Team switcher */}
         <div className="border-b border-border shrink-0">

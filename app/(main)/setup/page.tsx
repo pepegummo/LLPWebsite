@@ -1,30 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useAuthStore, useTeamStore, useRubricStore, useTagStore } from "@/store";
-import { DEFAULT_RUBRIC_WEIGHTS } from "@/store/rubricStore";
-import { RubricWeights } from "@/types";
+import { useAuthStore, useTeamStore, useTagStore } from "@/store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Settings, Tag, Sliders, RotateCcw, Plus, Trash2, Shield } from "lucide-react";
+import { Settings, Tag, Plus, Trash2, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-
-function generateId() {
-  return Math.random().toString(36).substring(2, 11);
-}
-
-const CRITERIA_LABELS: { key: keyof RubricWeights; label: string }[] = [
-  { key: "contribution", label: "Contribution (การมีส่วนร่วม)" },
-  { key: "qualityOfWork", label: "Quality of Work (คุณภาพงาน)" },
-  { key: "responsibility", label: "Responsibility (ความรับผิดชอบ)" },
-  { key: "communication", label: "Communication (การสื่อสาร)" },
-  { key: "teamwork", label: "Teamwork (การทำงานเป็นทีม)" },
-  { key: "effort", label: "Effort (ความพยายาม)" },
-];
 
 const TAG_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -34,10 +18,8 @@ const TAG_COLORS = [
 export default function StudentSetupPage() {
   const { currentUser } = useAuthStore();
   const { teams, getUserRole } = useTeamStore();
-  const { weights, setWeights, resetWeights } = useRubricStore();
   const { addTag, removeTag, getTagsByTeam } = useTagStore();
 
-  const [localWeights, setLocalWeights] = useState<RubricWeights>({ ...weights });
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
 
@@ -81,29 +63,6 @@ export default function StudentSetupPage() {
 
   const teamTags = getTagsByTeam(activeTeam.id);
 
-  const totalWeight = Object.values(localWeights).reduce((s, v) => s + v, 0);
-  const isWeightValid = totalWeight === 100;
-
-  const handleWeightChange = (key: keyof RubricWeights, value: string) => {
-    const num = parseInt(value) || 0;
-    setLocalWeights((prev) => ({ ...prev, [key]: num }));
-  };
-
-  const handleSaveWeights = () => {
-    if (!isWeightValid) {
-      toast.error(`น้ำหนักรวมต้องเท่ากับ 100 (ปัจจุบัน: ${totalWeight})`);
-      return;
-    }
-    setWeights(activeTeam.id, localWeights);
-    toast.success("บันทึกค่าน้ำหนัก Rubric แล้ว");
-  };
-
-  const handleResetWeights = () => {
-    setLocalWeights({ ...DEFAULT_RUBRIC_WEIGHTS });
-    resetWeights();
-    toast.success("รีเซ็ตค่าน้ำหนักแล้ว");
-  };
-
   const handleAddTag = () => {
     if (!newTagName.trim()) {
       toast.error("กรุณากรอกชื่อ tag");
@@ -128,58 +87,6 @@ export default function StudentSetupPage() {
         </h1>
         <p className="text-muted-foreground">ทีม: {activeTeam.name}</p>
       </div>
-
-      {/* Rubric Weights */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Sliders className="w-4 h-4" />
-            ค่าน้ำหนัก Rubric การประเมิน
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            กำหนดน้ำหนัก (%) สำหรับแต่ละเกณฑ์การประเมิน — ผลรวมต้องเท่ากับ 100
-          </p>
-
-          <div className="space-y-3">
-            {CRITERIA_LABELS.map(({ key, label }) => (
-              <div key={key} className="flex items-center gap-3">
-                <Label className="flex-1 text-sm">{label}</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={localWeights[key]}
-                    onChange={(e) => handleWeightChange(key, e.target.value)}
-                    className="w-20 text-right"
-                  />
-                  <span className="text-sm text-muted-foreground w-4">%</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className={cn(
-            "flex items-center justify-between p-3 rounded-md text-sm",
-            isWeightValid ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
-          )}>
-            <span>ผลรวมน้ำหนัก</span>
-            <span className="font-semibold">{totalWeight}%</span>
-          </div>
-
-          <div className="flex gap-2 justify-end">
-            <Button variant="outline" size="sm" onClick={handleResetWeights}>
-              <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
-              รีเซ็ต
-            </Button>
-            <Button size="sm" onClick={handleSaveWeights} disabled={!isWeightValid}>
-              บันทึกน้ำหนัก
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Tag Management */}
       <Card>

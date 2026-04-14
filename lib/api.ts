@@ -17,6 +17,32 @@ function getToken(): string | null {
   return localStorage.getItem("llp_access_token");
 }
 
+let _isRefreshing = false;
+let _refreshSubscribers: Array<(token: string) => void> = [];
+
+function onRefreshed(token: string) {
+  _refreshSubscribers.forEach((cb) => cb(token));
+  _refreshSubscribers = [];
+}
+
+async function tryRefreshToken(): Promise<string | null> {
+  const refreshToken = getSavedRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const res = await fetch(`${BASE_URL}/api/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { accessToken: string; refreshToken: string };
+    saveTokens(data.accessToken, data.refreshToken);
+    return data.accessToken;
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {}
@@ -29,6 +55,61 @@ async function request<T>(
   };
 
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+
+  if (res.status === 401 && !path.includes("/auth/")) {
+    // Try to refresh
+    if (!_isRefreshing) {
+      _isRefreshing = true;
+      const newToken = await tryRefreshToken();
+      _isRefreshing = false;
+      if (newToken) {
+        onRefreshed(newToken);
+        // Retry original request with new token
+        const retryHeaders: HeadersInit = {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${newToken}`,
+          ...(options.headers ?? {}),
+        };
+        const retryRes = await fetch(`${BASE_URL}${path}`, { ...options, headers: retryHeaders });
+        if (retryRes.status === 204) return undefined as T;
+        if (!retryRes.ok) {
+          const body = await retryRes.json().catch(() => ({}));
+          throw new Error(body.error ?? `HTTP ${retryRes.status}`);
+        }
+        return retryRes.json() as Promise<T>;
+      } else {
+        // Refresh failed → redirect to login
+        clearTokens();
+        if (typeof window !== "undefined") {
+          window.location.replace("/login");
+        }
+        throw new Error("Session expired");
+      }
+    } else {
+      // Wait for ongoing refresh
+      return new Promise<T>((resolve, reject) => {
+        _refreshSubscribers.push(async (newToken: string) => {
+          const retryHeaders: HeadersInit = {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${newToken}`,
+            ...(options.headers ?? {}),
+          };
+          try {
+            const retryRes = await fetch(`${BASE_URL}${path}`, { ...options, headers: retryHeaders });
+            if (retryRes.status === 204) { resolve(undefined as T); return; }
+            if (!retryRes.ok) {
+              const body = await retryRes.json().catch(() => ({}));
+              reject(new Error(body.error ?? `HTTP ${retryRes.status}`));
+              return;
+            }
+            resolve(retryRes.json() as Promise<T>);
+          } catch (e) {
+            reject(e);
+          }
+        });
+      });
+    }
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -74,6 +155,8 @@ export const api = {
       patch<Record<string, unknown>>("/api/users/me", data),
     updateContacts: (contacts: { type: string; value: string }[]) =>
       put<void>("/api/users/me/contacts", { contacts }),
+    changePassword: (currentPassword: string, newPassword: string) =>
+      post<void>("/api/users/me/change-password", { currentPassword, newPassword }),
     getById: (id: string) => get<Record<string, unknown>>(`/api/users/${id}`),
     searchByEmail: (email: string) =>
       get<Record<string, unknown>>(`/api/users/search?email=${encodeURIComponent(email)}`),
@@ -87,9 +170,15 @@ export const api = {
     update: (id: string, name: string) => patch<Record<string, unknown>>(`/api/workspaces/${id}`, { name }),
     addAdmin: (wsId: string, userId: string) =>
       post<void>(`/api/workspaces/${wsId}/admins`, { userId }),
+    addAdminByEmail: (wsId: string, email: string) =>
+      post<{ userId: string }>(`/api/workspaces/${wsId}/admins/by-email`, { email }),
     removeAdmin: (wsId: string, userId: string) =>
       del(`/api/workspaces/${wsId}/admins/${userId}`),
     listProjects: (wsId: string) => get<unknown[]>(`/api/workspaces/${wsId}/projects`),
+    createInviteLink: (wsId: string) =>
+      post<{ token: string }>(`/api/workspaces/${wsId}/invite-link`, {}),
+    acceptInviteLink: (token: string) =>
+      post<{ workspaceId: string }>(`/api/workspaces/accept-invite/${token}`, {}),
   },
 
   // -- Projects --------------------------------------------------------------
@@ -101,6 +190,14 @@ export const api = {
       patch<Record<string, unknown>>(`/api/projects/${id}`, data),
     delete: (id: string) => del(`/api/projects/${id}`),
     listTeams: (projectId: string) => get<unknown[]>(`/api/projects/${projectId}/teams`),
+    addAdminByEmail: (projectId: string, email: string) =>
+      post<void>(`/api/projects/${projectId}/admins`, { email }),
+    removeAdmin: (projectId: string, adminId: string) =>
+      del(`/api/projects/${projectId}/admins/${adminId}`),
+    createInviteLink: (projectId: string) =>
+      post<{ token: string }>(`/api/projects/${projectId}/invite-link`, {}),
+    acceptInviteLink: (token: string) =>
+      post<{ projectId: string }>(`/api/projects/accept-invite/${token}`, {}),
   },
 
   // -- Teams -----------------------------------------------------------------
@@ -111,6 +208,8 @@ export const api = {
       post<Record<string, unknown>>("/api/teams", { projectId, workspaceId, name }),
     invite: (teamId: string, userId: string) =>
       post<void>(`/api/teams/${teamId}/invite`, { userId }),
+    inviteByEmail: (teamId: string, email: string) =>
+      post<void>(`/api/teams/${teamId}/invite-by-email`, { email }),
     acceptInvite: (teamId: string) =>
       post<void>(`/api/teams/${teamId}/invite/accept`, {}),
     rejectInvite: (teamId: string) =>
@@ -121,6 +220,10 @@ export const api = {
       del(`/api/teams/${teamId}/members/${userId}`),
     setDisplayName: (teamId: string, displayName: string) =>
       put<void>(`/api/teams/${teamId}/display-name`, { displayName }),
+    createInviteLink: (teamId: string) =>
+      post<{ token: string }>(`/api/teams/${teamId}/invite-link`, {}),
+    acceptInviteLink: (token: string) =>
+      post<{ teamId: string }>(`/api/teams/accept-invite/${token}`, {}),
   },
 
   // -- Tasks -----------------------------------------------------------------
@@ -149,9 +252,9 @@ export const api = {
     mine: (teamId: string) => get<unknown[]>(`/api/teams/${teamId}/evaluations/my`),
     submit: (data: Record<string, unknown>) =>
       post<Record<string, unknown>>("/api/evaluations", data),
-    getRubric: (teamId: string) => get<Record<string, unknown>>(`/api/teams/${teamId}/rubric`),
-    updateRubric: (teamId: string, weights: Record<string, number>) =>
-      put<Record<string, unknown>>(`/api/teams/${teamId}/rubric`, weights),
+    getRubric: (workspaceId: string) => get<Record<string, unknown>>(`/api/workspaces/${workspaceId}/rubric`),
+    updateRubric: (workspaceId: string, weights: Record<string, unknown>) =>
+      put<Record<string, unknown>>(`/api/workspaces/${workspaceId}/rubric`, weights),
   },
 
   // -- Meetings --------------------------------------------------------------

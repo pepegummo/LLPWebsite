@@ -30,6 +30,7 @@ export function mapProject(r: Raw): Project {
     workspaceId: r.workspace_id,
     name: r.name,
     description: r.description,
+    adminIds: (r.project_admins ?? []).map((a: Raw) => a.user_id),
     createdAt: r.created_at,
   };
 }
@@ -196,6 +197,7 @@ export function mapTag(r: Raw): Tag {
 
 export function mapRubric(r: Raw): RubricWeights {
   return {
+    enabled: r.enabled ?? false,
     contribution: r.contribution,
     qualityOfWork: r.quality_of_work,
     responsibility: r.responsibility,
@@ -208,6 +210,7 @@ export function mapRubric(r: Raw): RubricWeights {
 export function mapProfile(r: Raw): UserProfile {
   return {
     userId: r.id,
+    name: r.name ?? "",
     firstName: r.first_name ?? "",
     lastName: r.last_name ?? "",
     bio: r.bio,

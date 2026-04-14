@@ -1,24 +1,50 @@
 "use client";
 
+import { useEffect } from "react";
 import { useAuthStore, useTeamStore, useEvaluationStore } from "@/store";
-import { mockUsers } from "@/lib/mockData";
+import { useProfileStore } from "@/store/profileStore";
 import { EvaluationForm } from "@/components/EvaluationForm";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Star } from "lucide-react";
+import { User } from "@/types";
 
 export default function StudentEvaluationPage() {
   const { currentUser } = useAuthStore();
   const { teams } = useTeamStore();
   const { evaluations } = useEvaluationStore();
+  const { getProfile, fetchProfile } = useProfileStore();
+
+  const activeTeam = currentUser
+    ? teams.find((t) => t.id === currentUser.activeTeamId)
+    : undefined;
+
+  const memberIds = activeTeam
+    ? activeTeam.members
+        .map((m) => m.userId)
+        .filter((id) => id !== currentUser?.id)
+    : [];
+
+  // Fetch profiles for all team members
+  useEffect(() => {
+    memberIds.forEach((id) => {
+      if (!getProfile(id)) fetchProfile(id).catch(() => {});
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTeam?.id]);
 
   if (!currentUser) return null;
 
-  const activeTeam = teams.find((t) => t.id === currentUser.activeTeamId);
-  const memberIds = activeTeam
-    ? activeTeam.members.map((m) => m.userId).filter((id) => id !== currentUser.id)
-    : [];
-  const members = mockUsers.filter((u) => memberIds.includes(u.id));
+  // Build User objects from real profiles
+  const members: User[] = memberIds.map((id) => {
+    const profile = getProfile(id);
+    const name = profile
+      ? [profile.firstName, profile.lastName].filter(Boolean).join(" ") ||
+        profile.name ||
+        id
+      : id;
+    return { id, name };
+  });
 
   const evaluatedCount = members.filter((m) =>
     evaluations.some(
@@ -67,6 +93,7 @@ export default function StudentEvaluationPage() {
                 key={member.id}
                 evaluatee={member}
                 teamId={activeTeam.id}
+                workspaceId={activeTeam.workspaceId}
               />
             ))}
           </div>

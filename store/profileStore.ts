@@ -48,6 +48,7 @@ export const useProfileStore = create<ProfileState>()((set, get) => ({
     return (
       profile.displayNames[teamId] ||
       [profile.firstName, profile.lastName].filter(Boolean).join(" ") ||
+      profile.name ||
       fallbackName
     );
   },
