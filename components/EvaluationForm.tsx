@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Evaluation, EvaluationCriteria } from "@/types";
+import { Evaluation, EvaluationCriteria, RubricWeights } from "@/types";
 import { useEvaluationStore, useAuthStore, useRubricStore } from "@/store";
 import { useDisplayName } from "@/lib/useDisplayName";
 import { User } from "@/types";
@@ -29,7 +29,7 @@ const CRITERIA_LABELS: { key: keyof EvaluationCriteria; label: string }[] = [
 
 function computeWeightedScore(
   criteria: EvaluationCriteria,
-  weights: Record<string, unknown>
+  weights: RubricWeights
 ): 1 | 2 | 3 | 4 | 5 {
   const totalWeight =
     CRITERIA_LABELS.reduce((s, { key }) => s + ((weights[key] as number) || 0), 0) || 100;

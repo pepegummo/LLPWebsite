@@ -145,7 +145,7 @@ export default function StudentTicketPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>ประเภท</Label>
-                  <Select value={type} onValueChange={(v) => setType(v as TicketType)}>
+                  <Select value={type} onValueChange={(v) => v && setType(v as TicketType)}>
                     <SelectTrigger>
                       <SelectValue>{(v: string | null) => v ? TICKET_TYPE_LABELS[v as TicketType] : "เลือกประเภท..."}</SelectValue>
                     </SelectTrigger>

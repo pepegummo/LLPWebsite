@@ -120,6 +120,7 @@ export default function StudentTeamPage() {
       // Cache the found user's profile so their name shows in pending list
       upsertProfile({
         userId: foundUser.id,
+        name: foundUser.name,
         firstName: foundUser.name,
         lastName: "",
         displayNames: {},
@@ -321,7 +322,7 @@ export default function StudentTeamPage() {
                         {isTeamLeader && (
                           <Select
                             value={memberEntry.role}
-                            onValueChange={(v) => handleSetRole(memberEntry.userId, v as TeamRole)}
+                            onValueChange={(v) => v && handleSetRole(memberEntry.userId, v as TeamRole)}
                           >
                             <SelectTrigger className="h-7 text-xs flex-1">
                               <Shield className="w-3 h-3 mr-1" />

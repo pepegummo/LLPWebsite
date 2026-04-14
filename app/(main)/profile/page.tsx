@@ -71,6 +71,7 @@ export default function ProfilePage() {
   const existing = getProfile(currentUser.id);
   const initial: UserProfile = existing ?? {
     userId: currentUser.id,
+    name: "",
     firstName: "",
     lastName: "",
     bio: "",
@@ -104,7 +105,7 @@ export default function ProfilePage() {
       toast.error("กรุณากรอกชื่อและนามสกุล");
       return;
     }
-    upsertProfile(form);
+    upsertProfile({ ...form, name: `${form.firstName.trim()} ${form.lastName.trim()}` });
     toast.success("บันทึกข้อมูลส่วนตัวแล้ว");
   };
 
@@ -406,7 +407,7 @@ export default function ProfilePage() {
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
               <Label>ประเภท</Label>
-              <Select value={newContactType} onValueChange={(v) => setNewContactType(v as ContactType)}>
+              <Select value={newContactType} onValueChange={(v) => v && setNewContactType(v as ContactType)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

@@ -24,6 +24,7 @@ export const mockProjects: Project[] = [
     workspaceId: "ws1",
     name: "โปรเจกต์กลางภาค",
     description: "โปรเจกต์สำหรับการประเมินกลางภาค",
+    adminIds: [],
     createdAt: "2026-03-01T00:00:00Z",
   },
   {
@@ -31,6 +32,7 @@ export const mockProjects: Project[] = [
     workspaceId: "ws1",
     name: "โปรเจกต์ปลายภาค",
     description: "โปรเจกต์สำหรับการประเมินปลายภาค",
+    adminIds: [],
     createdAt: "2026-03-15T00:00:00Z",
   },
 ];
@@ -305,6 +307,7 @@ export const mockNotifications: Notification[] = [
 export const mockProfiles: UserProfile[] = [
   {
     userId: "user1",
+    name: "อนันต์ ใจดี",
     firstName: "อนันต์",
     lastName: "ใจดี",
     bio: "นักศึกษาวิศวกรรมซอฟต์แวร์ ชอบทำ Full-stack development",
@@ -316,6 +319,7 @@ export const mockProfiles: UserProfile[] = [
   },
   {
     userId: "user2",
+    name: "มาลี สวยงาม",
     firstName: "มาลี",
     lastName: "สวยงาม",
     bio: "UX/UI Designer ที่รักในการออกแบบ",
@@ -327,6 +331,7 @@ export const mockProfiles: UserProfile[] = [
   },
   {
     userId: "user3",
+    name: "วิชัย เก่งมาก",
     firstName: "วิชัย",
     lastName: "เก่งมาก",
     bio: "Backend developer สาย Java & Spring Boot",
@@ -337,6 +342,7 @@ export const mockProfiles: UserProfile[] = [
   },
   {
     userId: "user4",
+    name: "สุดา รักเรียน",
     firstName: "สุดา",
     lastName: "รักเรียน",
     bio: "Data Science enthusiast",
@@ -347,6 +353,7 @@ export const mockProfiles: UserProfile[] = [
   },
   {
     userId: "user5",
+    name: "ประเสริฐ ขยันดี",
     firstName: "ประเสริฐ",
     lastName: "ขยันดี",
     bio: "DevOps & Cloud infrastructure",

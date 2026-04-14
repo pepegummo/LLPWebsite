@@ -40,8 +40,9 @@ function StarRow({ score }: { score: number }) {
   );
 }
 
-export function EvalResultsTable({ evaluations }: EvalResultsTableProps) {
-  const { weights } = useRubricStore();
+export function EvalResultsTable({ evaluations, groupId }: EvalResultsTableProps) {
+  const { getWeights } = useRubricStore();
+  const weights = getWeights(groupId);
 
   if (evaluations.length === 0) {
     return (

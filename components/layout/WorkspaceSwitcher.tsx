@@ -28,7 +28,7 @@ export function WorkspaceSwitcher() {
 
   const activeId = currentUser.activeWorkspaceId ?? "";
 
-  const handleChange = (wsId: string) => {
+  const handleChange = (wsId: string | null) => {
     setActiveWorkspace(wsId || null);
   };
 
