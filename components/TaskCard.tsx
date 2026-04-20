@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Task, TaskStatus } from "@/types";
-import { useTaskStore, useAuthStore, useActivityStore, useTagStore } from "@/store";
-import { mockUsers } from "@/lib/mockData";
+import { useTaskStore, useAuthStore, useActivityStore, useTagStore, useTeamStore, useProfileStore } from "@/store";
 import { useDisplayName } from "@/lib/useDisplayName";
 import { TaskForm } from "./TaskForm";
 import { Card, CardContent } from "@/components/ui/card";
@@ -71,10 +70,21 @@ export function TaskCard({ task }: TaskCardProps) {
   const { currentUser } = useAuthStore();
   const { addLog, getLogsByTask } = useActivityStore();
   const { getTagsByTeam } = useTagStore();
+  const { teams } = useTeamStore();
+  const { getProfile, fetchProfile } = useProfileStore();
   const resolveDisplayName = useDisplayName();
   const taskTags = getTagsByTeam(task.teamId).filter((t) =>
     (task.tags ?? []).includes(t.id)
   );
+
+  // Pre-fetch profiles for all assignees in this task
+  useEffect(() => {
+    const team = teams.find((t) => t.id === task.teamId);
+    if (!team) return;
+    team.members.forEach(({ userId }) => {
+      if (!getProfile(userId)) fetchProfile(userId).catch(() => {});
+    });
+  }, [task.teamId, teams]);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -93,9 +103,7 @@ export function TaskCard({ task }: TaskCardProps) {
     transition,
   };
 
-  const assignees = task.assigneeIds
-    .map((id) => mockUsers.find((u) => u.id === id))
-    .filter(Boolean) as (typeof mockUsers)[0][];
+  const assigneeIds = task.assigneeIds;
 
   const isOverdue =
     task.dueDate &&
@@ -173,7 +181,8 @@ export function TaskCard({ task }: TaskCardProps) {
   );
 
   const logUserName = (userId: string) => {
-    const fallback = mockUsers.find((u) => u.id === userId)?.name ?? userId;
+    const profile = getProfile(userId);
+    const fallback = profile?.firstName || profile?.name || userId;
     return resolveDisplayName(userId, fallback, task.teamId);
   };
 
@@ -246,10 +255,13 @@ export function TaskCard({ task }: TaskCardProps) {
 
               {/* Meta row */}
               <div className="flex flex-wrap gap-3 mt-2 text-xs text-muted-foreground">
-                {assignees.length > 0 && (
+                {assigneeIds.length > 0 && (
                   <span className="flex items-center gap-1">
                     <Users className="w-3 h-3" />
-                    {assignees.map((a) => resolveDisplayName(a.id, a.name, task.teamId)).join(", ")}
+                    {assigneeIds.map((id) => {
+                      const p = getProfile(id);
+                      return resolveDisplayName(id, p?.firstName || p?.name || id, task.teamId);
+                    }).join(", ")}
                   </span>
                 )}
                 {task.manHours != null && (
@@ -277,9 +289,7 @@ export function TaskCard({ task }: TaskCardProps) {
               {hasSubTasks && (
                 <div className="mt-2 space-y-1.5">
                   {task.subTasks.map((st) => {
-                    const subAssignees = (st.assigneeIds ?? [])
-                      .map((id) => mockUsers.find((u) => u.id === id))
-                      .filter(Boolean) as (typeof mockUsers)[0][];
+                    const subAssigneeIds = st.assigneeIds ?? [];
                     return (
                       <div key={st.id}>
                         <button
@@ -301,10 +311,13 @@ export function TaskCard({ task }: TaskCardProps) {
                             </span>
                           )}
                         </button>
-                        {subAssignees.length > 0 && (
+                        {subAssigneeIds.length > 0 && (
                           <p className="text-[10px] text-muted-foreground/70 ml-5 flex items-center gap-0.5">
                             <Users className="w-2.5 h-2.5" />
-                            {subAssignees.map((a) => resolveDisplayName(a.id, a.name, task.teamId)).join(", ")}
+                            {subAssigneeIds.map((id) => {
+                              const p = getProfile(id);
+                              return resolveDisplayName(id, p?.firstName || p?.name || id, task.teamId);
+                            }).join(", ")}
                           </p>
                         )}
                       </div>
@@ -395,19 +408,22 @@ export function TaskCard({ task }: TaskCardProps) {
           open={editOpen}
           onClose={() => setEditOpen(false)}
           onSave={(t) => {
-            updateTask(t.id, t as unknown as Record<string, unknown>);
-            if (currentUser) {
-              addLog({
-                id: Math.random().toString(36).substring(2, 11),
-                taskId: t.id,
-                taskTitle: t.title,
-                teamId: t.teamId,
-                userId: currentUser.id,
-                action: "แก้ไขข้อมูลงาน",
-                timestamp: new Date().toISOString(),
-              });
-            }
-            toast.success("อัปเดตงานแล้ว");
+            updateTask(t.id, t as unknown as Record<string, unknown>)
+              .then(() => {
+                if (currentUser) {
+                  addLog({
+                    id: Math.random().toString(36).substring(2, 11),
+                    taskId: t.id,
+                    taskTitle: t.title,
+                    teamId: t.teamId,
+                    userId: currentUser.id,
+                    action: "แก้ไขข้อมูลงาน",
+                    timestamp: new Date().toISOString(),
+                  });
+                }
+                toast.success("อัปเดตงานแล้ว");
+              })
+              .catch(() => toast.error("อัปเดตงานไม่สำเร็จ"));
           }}
           initialTask={task}
           teamId={task.teamId}

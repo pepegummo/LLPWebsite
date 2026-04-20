@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Task, TaskStatus } from "@/types";
-import { useTaskStore, useAuthStore, useActivityStore, useTagStore } from "@/store";
+import { useTaskStore, useAuthStore, useActivityStore, useTagStore, useTeamStore, useProfileStore } from "@/store";
 import { KanbanColumn } from "./KanbanColumn";
 import { TaskForm } from "./TaskForm";
 import { Button } from "@/components/ui/button";
@@ -39,10 +39,26 @@ interface KanbanBoardProps {
 }
 
 export function KanbanBoard({ teamId }: KanbanBoardProps) {
-  const { tasks, addTask, moveTask, updateTask } = useTaskStore();
+  const { tasks, fetchTasks, addTask, moveTask, updateTask } = useTaskStore();
   const { currentUser } = useAuthStore();
   const { addLog } = useActivityStore();
   const { getTagsByTeam } = useTagStore();
+  const { teams } = useTeamStore();
+  const { getProfile, fetchProfile } = useProfileStore();
+
+  // Load tasks from database on mount / when team changes
+  useEffect(() => {
+    fetchTasks(teamId);
+  }, [teamId]);
+
+  // Pre-fetch profiles for all team members so TaskForm shows names immediately
+  useEffect(() => {
+    const team = teams.find((t) => t.id === teamId);
+    if (!team) return;
+    team.members.forEach(({ userId }) => {
+      if (!getProfile(userId)) fetchProfile(userId).catch(() => {});
+    });
+  }, [teamId, teams]);
   const [addOpen, setAddOpen] = useState(false);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [filterMine, setFilterMine] = useState(false);
@@ -215,19 +231,22 @@ export function KanbanBoard({ teamId }: KanbanBoardProps) {
           open={addOpen}
           onClose={() => setAddOpen(false)}
           onSave={(task) => {
-            addTask(task as unknown as Record<string, unknown>);
-            if (currentUser) {
-              addLog({
-                id: Math.random().toString(36).substring(2, 11),
-                taskId: task.id,
-                taskTitle: task.title,
-                teamId,
-                userId: currentUser.id,
-                action: "สร้างงานใหม่",
-                timestamp: new Date().toISOString(),
-              });
-            }
-            toast.success("เพิ่มงานแล้ว");
+            addTask(task as unknown as Record<string, unknown>)
+              .then((saved) => {
+                if (currentUser) {
+                  addLog({
+                    id: Math.random().toString(36).substring(2, 11),
+                    taskId: saved.id,
+                    taskTitle: saved.title,
+                    teamId,
+                    userId: currentUser.id,
+                    action: "สร้างงานใหม่",
+                    timestamp: new Date().toISOString(),
+                  });
+                }
+                toast.success("เพิ่มงานแล้ว");
+              })
+              .catch(() => toast.error("เพิ่มงานไม่สำเร็จ"));
           }}
           teamId={teamId}
         />

@@ -1,5 +1,23 @@
 # Changelog — LLPWebsite
 
+## [Unreleased] — 2026-04-20
+
+### `components/TaskForm.tsx`
+- ลบการใช้ `mockUsers` ออก → ใช้ `team.members` จริงแทน (แก้ปัญหาไม่เจอสมาชิกในกลุ่ม)
+- เพิ่ม `useProfileStore` และ `useEffect` fetch profile ของสมาชิกเมื่อ dialog เปิด
+- แสดงชื่อจาก `profileStore` ทั้งส่วน main assignee และ sub-task assignee
+
+### `components/KanbanBoard.tsx`
+- เพิ่ม `useEffect` เรียก `fetchTasks(teamId)` เมื่อ mount / เปลี่ยนทีม (แก้ปัญหา data หายหลัง refresh)
+- เพิ่ม `useEffect` pre-fetch profile สมาชิกก่อนที่ TaskForm จะเปิด (แก้ปัญหา UUID flash)
+- แก้ `onSave` ให้ await `addTask` ก่อนแสดง toast — แสดง error toast ถ้า API ล้มเหลว
+
+### `components/TaskCard.tsx`
+- ลบการใช้ `mockUsers` ออกทั้งหมด → ใช้ `profileStore.getProfile()` แทน
+- เพิ่ม `useEffect` pre-fetch profile สมาชิกในทีม
+- แก้การแสดงชื่อ assignee (task หลัก, sub-task, activity log) ให้ใช้ profile จริง
+- แก้ `onSave` ให้ await `updateTask` ก่อนแสดง toast — แสดง error toast ถ้า API ล้มเหลว
+
 ## [Unreleased] — 2026-04-14
 
 ### `app/(main)/evaluation/page.tsx`

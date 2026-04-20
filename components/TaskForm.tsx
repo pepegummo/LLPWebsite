@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Task, TaskStatus, Attachment, SubTask } from "@/types";
-import { useTeamStore, useAuthStore, useNotificationStore, useTagStore } from "@/store";
-import { mockUsers } from "@/lib/mockData";
+import { useTeamStore, useAuthStore, useNotificationStore, useTagStore, useProfileStore } from "@/store";
 import { useDisplayName } from "@/lib/useDisplayName";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,10 +56,16 @@ export function TaskForm({
   const { getTagsByTeam } = useTagStore();
 
   const resolveDisplayName = useDisplayName();
+  const { getProfile, fetchProfile } = useProfileStore();
   const team = teams.find((t) => t.id === teamId);
   const groupTags = getTagsByTeam(teamId);
-  const memberIds = team ? team.members.map((m) => m.userId) : [];
-  const members = mockUsers.filter((u) => memberIds.includes(u.id));
+  const teamMembers = team ? team.members : [];
+
+  useEffect(() => {
+    teamMembers.forEach(({ userId }) => {
+      if (!getProfile(userId)) fetchProfile(userId).catch(() => {});
+    });
+  }, [teamId, teamMembers.length]);
 
   const [title, setTitle] = useState(initialTask?.title ?? "");
   const [description, setDescription] = useState(
@@ -362,17 +367,19 @@ export function TaskForm({
           {/* Assignees (checkboxes) */}
           <div className="space-y-2">
             <Label>ผู้รับผิดชอบ (task หลัก)</Label>
-            {members.length === 0 ? (
+            {teamMembers.length === 0 ? (
               <p className="text-sm text-muted-foreground">ไม่มีสมาชิกในกลุ่ม</p>
             ) : (
               <div className="grid grid-cols-1 gap-1">
-                {members.map((m) => {
-                  const checked = assigneeIds.includes(m.id);
+                {teamMembers.map((m) => {
+                  const checked = assigneeIds.includes(m.userId);
+                  const profile = getProfile(m.userId);
+                  const displayName = resolveDisplayName(m.userId, profile?.firstName || m.userId, teamId);
                   return (
                     <button
-                      key={m.id}
+                      key={m.userId}
                       type="button"
-                      onClick={() => toggleAssignee(m.id)}
+                      onClick={() => toggleAssignee(m.userId)}
                       className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors text-left ${
                         checked
                           ? "bg-primary/10 border border-primary/30"
@@ -384,7 +391,7 @@ export function TaskForm({
                       ) : (
                         <Square className="w-4 h-4 text-muted-foreground shrink-0" />
                       )}
-                      <span>{resolveDisplayName(m.id, m.name, teamId)}</span>
+                      <span>{displayName}</span>
                     </button>
                   );
                 })}
@@ -459,13 +466,15 @@ export function TaskForm({
                     <p className="text-xs text-muted-foreground">
                       ผู้รับผิดชอบ sub-task:
                     </p>
-                    {members.map((m) => {
-                      const checked = (st.assigneeIds ?? []).includes(m.id);
+                    {teamMembers.map((m) => {
+                      const checked = (st.assigneeIds ?? []).includes(m.userId);
+                      const profile = getProfile(m.userId);
+                      const displayName = resolveDisplayName(m.userId, profile?.firstName || m.userId, teamId);
                       return (
                         <button
-                          key={m.id}
+                          key={m.userId}
                           type="button"
-                          onClick={() => toggleSubTaskAssignee(st.id, m.id)}
+                          onClick={() => toggleSubTaskAssignee(st.id, m.userId)}
                           className={`flex items-center gap-2 px-2 py-1 rounded text-xs w-full text-left transition-colors ${
                             checked
                               ? "bg-primary/10 border border-primary/30"
@@ -477,7 +486,7 @@ export function TaskForm({
                           ) : (
                             <Square className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                           )}
-                          <span>{resolveDisplayName(m.id, m.name, teamId)}</span>
+                          <span>{displayName}</span>
                         </button>
                       );
                     })}
