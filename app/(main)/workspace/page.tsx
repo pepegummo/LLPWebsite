@@ -110,10 +110,22 @@ export default function WorkspacePage() {
   // Loading state per action
   const [saving, setSaving] = useState(false);
 
-  // Fetch projects for any new workspace that was just added
+  // Derive before hooks so useEffect can reference them
+  const managedWorkspaces = getWorkspacesByUser(currentUser?.id ?? "");
+  const userTeams = getTeamsByUser(currentUser?.id ?? "");
+  const memberWorkspaceIds = new Set(userTeams.map((t) => t.workspaceId));
+  const allWorkspaces = [
+    ...managedWorkspaces,
+    ...workspaces.filter(
+      (w) => memberWorkspaceIds.has(w.id) && !managedWorkspaces.find((m) => m.id === w.id)
+    ),
+  ];
+
+  // Fetch projects for every accessible workspace
   useEffect(() => {
-    workspaces.forEach((ws) => fetchProjects(ws.id));
-  }, [workspaces.length]);
+    allWorkspaces.forEach((ws) => fetchProjects(ws.id));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allWorkspaces.length]);
 
   // Fetch profiles for all admin IDs we encounter
   useEffect(() => {
@@ -144,11 +156,8 @@ export default function WorkspacePage() {
 
   if (!currentUser) return null;
 
-  const managedWorkspaces = getWorkspacesByUser(currentUser.id);
-  const userTeams = getTeamsByUser(currentUser.id);
-
   const visibleProjectIds = new Set([
-    ...managedWorkspaces.flatMap((ws) => getProjectsByWorkspace(ws.id).map((p) => p.id)),
+    ...allWorkspaces.flatMap((ws) => getProjectsByWorkspace(ws.id).map((p) => p.id)),
     ...userTeams.map((t) => t.projectId),
   ]);
   const visibleProjects = projects.filter((p) => visibleProjectIds.has(p.id));
@@ -373,60 +382,9 @@ export default function WorkspacePage() {
         </Button>
       </div>
 
-      {/* ทีมของฉัน */}
-      {userTeams.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Users className="w-4 h-4 text-primary" />
-              ทีมของฉัน
-              <Badge variant="secondary" className="text-xs">{userTeams.length} ทีม</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {userTeams.map((team) => {
-              const proj = projects.find((p) => p.id === team.projectId);
-              const ws = workspaces.find((w) => w.id === team.workspaceId);
-              const myRole = getUserRole(team.id, currentUser.id);
-              const isThisLeader = myRole === "team_leader";
-              return (
-                <div key={team.id} className="flex items-center justify-between border border-border rounded-lg px-3 py-2.5">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Users className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm truncate">{team.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {ws?.name} <ChevronRight className="w-3 h-3 inline" /> {proj?.name}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
-                    {myRole && (
-                      <Badge variant="outline" className="text-xs">
-                        {myRole === "team_leader" ? "Team Leader" : myRole === "assistant_leader" ? "Assistant Leader" : "Member"}
-                      </Badge>
-                    )}
-                    {isThisLeader && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                        onClick={() => setDeleteTarget({ type: "team", id: team.id, name: team.name })}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Workspaces */}
       <div className="space-y-4">
-        {managedWorkspaces.length === 0 && userTeams.length === 0 ? (
+        {allWorkspaces.length === 0 ? (
           <Card>
             <CardContent className="py-16 text-center text-muted-foreground">
               <Layers className="w-12 h-12 mx-auto mb-3 opacity-20" />
@@ -439,11 +397,16 @@ export default function WorkspacePage() {
             </CardContent>
           </Card>
         ) : (
-          managedWorkspaces.map((ws) => {
+          allWorkspaces.map((ws) => {
             const myWsRole = getWorkspaceRole(ws.id, currentUser.id)!;
             const isOwner = myWsRole === "owner";
             const canManageProject = isOwner || myWsRole === "admin";
-            const wsProjects = getProjectsByWorkspace(ws.id);
+            // members see only projects they have a team in
+            const wsProjects = canManageProject
+              ? getProjectsByWorkspace(ws.id)
+              : getProjectsByWorkspace(ws.id).filter((p) =>
+                  userTeams.some((t) => t.projectId === p.id)
+                );
 
             return (
               <Card key={ws.id}>
@@ -528,7 +491,10 @@ export default function WorkspacePage() {
                     <p className="text-sm text-muted-foreground">ยังไม่มี Project</p>
                   ) : (
                     wsProjects.map((proj) => {
-                      const projTeams = teams.filter((t) => t.projectId === proj.id);
+                      // members see only their own teams
+                      const projTeams = canManageProject
+                        ? teams.filter((t) => t.projectId === proj.id)
+                        : teams.filter((t) => t.projectId === proj.id && userTeams.some((ut) => ut.id === t.id));
                       return (
                         <div key={proj.id} className="border border-border rounded-lg p-3 space-y-2">
                           <div className="flex items-center justify-between">
@@ -634,13 +600,15 @@ export default function WorkspacePage() {
                                 </div>
                               );
                             })}
-                            <button
-                              className="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs text-muted-foreground hover:text-primary hover:bg-muted/60 rounded-md transition-colors"
-                              onClick={() => { setTeamProjectId(proj.id); setNewTeamOpen(true); }}
-                            >
-                              <PlusCircle className="w-3.5 h-3.5" />
-                              เพิ่มทีม
-                            </button>
+                            {canManageProject && (
+                              <button
+                                className="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs text-muted-foreground hover:text-primary hover:bg-muted/60 rounded-md transition-colors"
+                                onClick={() => { setTeamProjectId(proj.id); setNewTeamOpen(true); }}
+                              >
+                                <PlusCircle className="w-3.5 h-3.5" />
+                                เพิ่มทีม
+                              </button>
+                            )}
                           </div>
                         </div>
                       );

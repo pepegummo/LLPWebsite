@@ -1,13 +1,15 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuthStore, useTaskStore, useTeamStore, useActivityStore } from "@/store";
+import { useProfileStore } from "@/store/profileStore";
+import { useDisplayName } from "@/lib/useDisplayName";
 import { WorkloadBar } from "@/components/WorkloadBar";
-import { mockUsers } from "@/lib/mockData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import {
   CheckCircle2,
   Clock,
@@ -16,6 +18,7 @@ import {
   ArrowLeft,
   User,
   History,
+  Shuffle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -38,13 +41,33 @@ export default function TeamDashboardPage({
 }) {
   const { groupId: teamId } = use(params);
   const { currentUser } = useAuthStore();
-  const { tasks } = useTaskStore();
+  const { tasks, updateTask } = useTaskStore();
   const { teams } = useTeamStore();
   const { getLogsByTeam } = useActivityStore();
+  const { getProfile, fetchProfile } = useProfileStore();
+  const resolveDisplayName = useDisplayName();
+  const [reassigning, setReassigning] = useState(false);
+
+  // Derive before any conditional return so hooks order stays stable
+  const team = teams.find((t) => t.id === teamId);
+  const memberIds = team?.members.map((m) => m.userId) ?? [];
+  const teamTasks = tasks.filter((t) => t.teamId === teamId);
+  const activityLogs = getLogsByTeam(teamId)
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, 20);
+
+  useEffect(() => {
+    const ids = new Set([
+      ...memberIds,
+      ...activityLogs.map((l) => l.userId),
+    ]);
+    ids.forEach((id) => {
+      if (!getProfile(id)) fetchProfile(id).catch(() => {});
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamId, activityLogs.length]);
 
   if (!currentUser) return null;
-
-  const team = teams.find((t) => t.id === teamId);
   if (!team) {
     return (
       <div className="space-y-4">
@@ -58,8 +81,6 @@ export default function TeamDashboardPage({
     );
   }
 
-  const memberIds = team.members.map((m) => m.userId);
-  const teamTasks = tasks.filter((t) => t.teamId === teamId);
   const totalTasks = teamTasks.length;
   const doneTasks = teamTasks.filter((t) => t.status === "done").length;
   const inProgressTasks = teamTasks.filter((t) => t.status === "in_progress").length;
@@ -67,9 +88,46 @@ export default function TeamDashboardPage({
     (t) => t.dueDate && t.status !== "done" && new Date(t.dueDate) < new Date()
   ).length;
 
-  const activityLogs = getLogsByTeam(teamId)
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-    .slice(0, 20);
+  const handleReassign = async () => {
+    if (memberIds.length === 0) return;
+    const todoTasks = teamTasks.filter((t) => t.status === "todo");
+    if (todoTasks.length === 0) {
+      toast.info("ไม่มีงานที่รอดำเนินการให้จัดสมดุล");
+      return;
+    }
+
+    // Workload = sum of manHours (0 if unset) across ALL tasks per member
+    const workload: Record<string, number> = {};
+    memberIds.forEach((id) => { workload[id] = 0; });
+    teamTasks
+      .filter((t) => t.status !== "todo")
+      .forEach((t) => {
+        t.assigneeIds.forEach((id) => {
+          if (id in workload) workload[id] += t.manHours ?? 0;
+        });
+      });
+
+    // Greedy largest-first: assign todo task to member with lowest workload
+    const sorted = [...todoTasks].sort((a, b) => (b.manHours ?? 0) - (a.manHours ?? 0));
+    const updates: { id: string; assigneeIds: string[] }[] = [];
+
+    for (const task of sorted) {
+      const minId = memberIds.reduce((min, id) =>
+        workload[id] < workload[min] ? id : min, memberIds[0]);
+      updates.push({ id: task.id, assigneeIds: [minId] });
+      workload[minId] += task.manHours ?? 0;
+    }
+
+    setReassigning(true);
+    try {
+      await Promise.all(updates.map((u) => updateTask(u.id, { assigneeIds: u.assigneeIds })));
+      toast.success(`จัดสมดุลงาน ${updates.length} รายการเรียบร้อย`);
+    } catch {
+      toast.error("เกิดข้อผิดพลาด กรุณาลองใหม่");
+    } finally {
+      setReassigning(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -127,7 +185,18 @@ export default function TeamDashboardPage({
 
       {/* Workload */}
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">ภาระงานสมาชิก</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">ภาระงานสมาชิก</h2>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleReassign}
+            disabled={reassigning}
+          >
+            <Shuffle className="w-4 h-4 mr-1.5" />
+            {reassigning ? "กำลังจัดสมดุล..." : "จัดสมดุลงาน"}
+          </Button>
+        </div>
         <Card>
           <CardContent className="p-4">
             <WorkloadBar tasks={teamTasks} memberIds={memberIds} teamId={teamId} />
@@ -145,9 +214,6 @@ export default function TeamDashboardPage({
         ) : (
           <div className="space-y-2">
             {teamTasks.map((task) => {
-              const assignees = task.assigneeIds
-                .map((id) => mockUsers.find((u) => u.id === id))
-                .filter(Boolean);
               const isOverdue =
                 task.dueDate &&
                 task.status !== "done" &&
@@ -165,10 +231,10 @@ export default function TeamDashboardPage({
                           </p>
                         )}
                         <div className="flex flex-wrap gap-1.5 mt-1.5 text-xs text-muted-foreground">
-                          {assignees.map((a) => (
-                            <span key={a!.id} className="flex items-center gap-0.5">
+                          {task.assigneeIds.map((id) => (
+                            <span key={id} className="flex items-center gap-0.5">
                               <User className="w-3 h-3" />
-                              {a!.name}
+                              {resolveDisplayName(id, id, teamId)}
                             </span>
                           ))}
                           {task.dueDate && (
@@ -206,29 +272,28 @@ export default function TeamDashboardPage({
           </Card>
         ) : (
           <div className="space-y-1.5">
-            {activityLogs.map((log) => {
-              const user = mockUsers.find((u) => u.id === log.userId);
-              return (
-                <Card key={log.id}>
-                  <CardContent className="p-3 text-sm">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <span className="font-medium">{user?.name ?? log.userId}</span>{" "}
-                        <span className="text-muted-foreground">{log.action}</span>
-                        {log.taskTitle && (
-                          <span className="text-muted-foreground">
-                            {" "}— <span className="text-foreground">{log.taskTitle}</span>
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs text-muted-foreground shrink-0">
-                        {formatDate(log.timestamp)}
-                      </span>
+            {activityLogs.map((log) => (
+              <Card key={log.id}>
+                <CardContent className="p-3 text-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="font-medium">
+                        {resolveDisplayName(log.userId, log.userId, teamId)}
+                      </span>{" "}
+                      <span className="text-muted-foreground">{log.action}</span>
+                      {log.taskTitle && (
+                        <span className="text-muted-foreground">
+                          {" "}— <span className="text-foreground">{log.taskTitle}</span>
+                        </span>
+                      )}
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {formatDate(log.timestamp)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
       </div>

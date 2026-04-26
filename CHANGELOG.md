@@ -1,5 +1,23 @@
 # Changelog — LLPWebsite
 
+## [Unreleased] — 2026-04-26
+
+### New Features
+
+- **`app/(main)/evaluation/summary/page.tsx`** (ไฟล์ใหม่) — หน้าภาพรวมผลการประเมินทั้งทีม พร้อม stats card (จำนวนทั้งหมด, สมาชิกที่ถูกประเมิน, คะแนนเฉลี่ย)
+- **`app/(main)/dashboard/[groupId]/page.tsx`** — เพิ่มปุ่ม "จัดสมดุลงาน" สำหรับ re-assign งานโดยใช้ greedy bin-packing (largest task first)
+
+### Bug Fixes
+
+- **`app/(main)/workspace/page.tsx`** — แสดง Workspace ที่ผู้ใช้เป็นสมาชิกทีม ไม่ใช่แค่ Owner/Admin; ลบ section "ทีมของฉัน" ออก
+- **`app/(main)/ticket/page.tsx`** — เพิ่ม `fetchTickets` ใน `useEffect` แก้ข้อมูลหายหลัง refresh; แก้ payload `addTicket` ส่งเฉพาะ field ที่จำเป็น; เปลี่ยนจาก mock data เป็น profile store
+- **`app/(main)/meeting/page.tsx`** — เพิ่ม `fetchMeetings` ใน `useEffect` แก้ข้อมูลหายหลัง refresh
+- **`app/(main)/links/page.tsx`** — เพิ่ม `fetchLinks` / `fetchTags` ใน `useEffect` แก้ข้อมูลหายหลัง refresh
+- **`app/(main)/dashboard/[groupId]/page.tsx`** — แก้ Change Log แสดง user ID แทนชื่อจริง; แก้ WorkloadBar ไม่แสดงผลเพราะอ้างอิง mock data; แก้ภาระงานกลับค่าเดิมหลัง refresh; แก้ algorithm fallback man-hours (`?? 1` → `?? 0`); เพิ่ม auto-fetch tasks เมื่อเข้าเว็บ
+- **`app/(main)/evaluation/page.tsx`** — แก้การบันทึกประเมินเรียก API จริง; แสดงชื่อจริงในตารางผลการประเมิน
+- **`components/WorkloadBar.tsx`** — แก้ iterate `memberIds` โดยตรงแทน `mockUsers.filter`
+- **`app/(main)/layout.tsx`** — เพิ่ม `fetchTasks(activeTeamId)` เพื่อโหลด task อัตโนมัติเมื่อเข้าเว็บ
+
 ## [Unreleased] — 2026-04-20
 
 ### `components/TaskForm.tsx`

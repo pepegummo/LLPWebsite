@@ -3,16 +3,18 @@
 import { useEffect } from "react";
 import { useAuthStore, useTeamStore, useEvaluationStore } from "@/store";
 import { useProfileStore } from "@/store/profileStore";
+import Link from "next/link";
 import { EvaluationForm } from "@/components/EvaluationForm";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Star, BarChart2 } from "lucide-react";
 import { User } from "@/types";
 
 export default function StudentEvaluationPage() {
   const { currentUser } = useAuthStore();
   const { teams } = useTeamStore();
-  const { evaluations } = useEvaluationStore();
+  const { evaluations, fetchEvaluations } = useEvaluationStore();
   const { getProfile, fetchProfile } = useProfileStore();
 
   const activeTeam = currentUser
@@ -25,8 +27,9 @@ export default function StudentEvaluationPage() {
         .filter((id) => id !== currentUser?.id)
     : [];
 
-  // Fetch profiles for all team members
   useEffect(() => {
+    if (!activeTeam) return;
+    fetchEvaluations(activeTeam.id).catch(() => {});
     memberIds.forEach((id) => {
       if (!getProfile(id)) fetchProfile(id).catch(() => {});
     });
@@ -54,11 +57,18 @@ export default function StudentEvaluationPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">ประเมินเพื่อนร่วมทีม</h1>
-        {activeTeam && (
-          <p className="text-muted-foreground">ทีม: {activeTeam.name}</p>
-        )}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">ประเมินเพื่อนร่วมทีม</h1>
+          {activeTeam && (
+            <p className="text-muted-foreground">ทีม: {activeTeam.name}</p>
+          )}
+        </div>
+        <Link href="/evaluation/summary">
+          <Button variant="outline" size="sm">
+            <BarChart2 className="w-4 h-4 mr-1" /> ดูภาพรวม
+          </Button>
+        </Link>
       </div>
 
       {!activeTeam ? (

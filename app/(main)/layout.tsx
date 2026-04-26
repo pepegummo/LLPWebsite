@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/store";
+import { useAuthStore, useTaskStore } from "@/store";
 import { useWorkspaceStore } from "@/store/workspaceStore";
 import { useProjectStore } from "@/store/projectStore";
 import { useTeamStore } from "@/store/teamStore";
@@ -20,6 +20,7 @@ export default function StudentLayout({
   const { fetchWorkspaces, workspaces } = useWorkspaceStore();
   const { fetchProjects } = useProjectStore();
   const { fetchMyTeams } = useTeamStore();
+  const { fetchTasks } = useTaskStore();
   const [hydrated, setHydrated] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -41,6 +42,12 @@ export default function StudentLayout({
     fetchWorkspaces();
     fetchMyTeams();
   }, [currentUser?.id]);
+
+  // Fetch tasks for active team on load / team switch
+  useEffect(() => {
+    if (!currentUser?.activeTeamId) return;
+    fetchTasks(currentUser.activeTeamId);
+  }, [currentUser?.activeTeamId]);
 
   // Fetch projects for each workspace when workspaces load
   useEffect(() => {

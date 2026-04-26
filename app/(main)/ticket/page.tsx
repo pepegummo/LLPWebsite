@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuthStore, useTeamStore, useTicketStore } from "@/store";
-import { mockUsers } from "@/lib/mockData";
+import { useProfileStore } from "@/store/profileStore";
 import { TicketType } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,10 +20,6 @@ import {
 import { Ticket, Send, MessageSquare, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-
-function generateId() {
-  return Math.random().toString(36).substring(2, 11);
-}
 
 const TICKET_TYPE_LABELS: Record<TicketType, string> = {
   question: "คำถาม",
@@ -47,7 +43,8 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline" | "des
 export default function StudentTicketPage() {
   const { currentUser } = useAuthStore();
   const { teams } = useTeamStore();
-  const { tickets, addTicket, addMessage } = useTicketStore();
+  const { tickets, fetchTickets, addTicket, addMessage } = useTicketStore();
+  const { getProfile, fetchProfile } = useProfileStore();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -55,9 +52,23 @@ export default function StudentTicketPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState<Record<string, string>>({});
 
+  const activeTeamId = currentUser?.activeTeamId ?? null;
+
+  useEffect(() => {
+    if (!activeTeamId) return;
+    fetchTickets(activeTeamId).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTeamId]);
+
+  // Fetch profiles for message senders
+  useEffect(() => {
+    const senderIds = tickets.flatMap((t) => t.messages.map((m) => m.senderId));
+    const unique = [...new Set(senderIds)];
+    unique.forEach((id) => { if (!getProfile(id)) fetchProfile(id).catch(() => {}); });
+  }, [tickets, getProfile, fetchProfile]);
+
   if (!currentUser) return null;
 
-  const activeTeamId = currentUser.activeTeamId ?? null;
   const activeTeam = teams.find((t) => t.id === activeTeamId);
 
   const myTickets = tickets
@@ -73,23 +84,20 @@ export default function StudentTicketPage() {
       toast.error("กรุณาเลือกทีมก่อน");
       return;
     }
-    const now = new Date().toISOString();
     addTicket({
-      id: generateId(),
       teamId: activeTeamId,
       studentId: currentUser.id,
       title: title.trim(),
       description: description.trim(),
       type,
-      status: "open",
-      createdAt: now,
-      updatedAt: now,
-      messages: [],
+    }).then(() => {
+      setTitle("");
+      setDescription("");
+      setType("question");
+      toast.success("ส่ง Ticket แล้ว");
+    }).catch(() => {
+      toast.error("เกิดข้อผิดพลาด กรุณาลองใหม่");
     });
-    setTitle("");
-    setDescription("");
-    setType("question");
-    toast.success("ส่ง Ticket แล้ว");
   };
 
   const handleSendReply = (ticketId: string) => {
@@ -100,8 +108,15 @@ export default function StudentTicketPage() {
     toast.success("ส่งข้อความแล้ว");
   };
 
-  const getUserName = (userId: string) =>
-    mockUsers.find((u) => u.id === userId)?.name ?? userId;
+  const getUserName = (userId: string) => {
+    const profile = getProfile(userId);
+    return profile
+      ? profile.displayNames?.[activeTeamId ?? ""] ||
+        [profile.firstName, profile.lastName].filter(Boolean).join(" ") ||
+        profile.name ||
+        userId
+      : userId;
+  };
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleString("th-TH", {

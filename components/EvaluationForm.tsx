@@ -89,8 +89,7 @@ const EMPTY_CRITERIA: EvaluationCriteria = {
 
 export function EvaluationForm({ evaluatee, teamId, workspaceId }: EvaluationFormProps) {
   const { currentUser } = useAuthStore();
-  const { addEvaluation, updateEvaluation, hasEvaluated, evaluations } =
-    useEvaluationStore();
+  const { addEvaluation, hasEvaluated, evaluations } = useEvaluationStore();
   const { getWeights } = useRubricStore();
   const weights = getWeights(workspaceId);
   const resolveDisplayName = useDisplayName();
@@ -132,30 +131,27 @@ export function EvaluationForm({ evaluatee, teamId, workspaceId }: EvaluationFor
 
     const score = computeWeightedScore(criteria, weights);
 
-    if (isEditing && existingEval) {
-      updateEvaluation({
-        ...existingEval,
-        score,
-        criteriaScores: criteria,
-        comment: comment.trim(),
-        submittedAt: new Date().toISOString(),
-      });
-      toast.success(`แก้ไขการประเมิน ${evaluateeName} แล้ว`);
-      setIsEditing(false);
-    } else {
-      const evaluation: Evaluation = {
-        id: generateId(),
-        teamId,
-        evaluatorId: currentUser.id,
-        evaluateeId: evaluatee.id,
-        score,
-        criteriaScores: criteria,
-        comment: comment.trim(),
-        submittedAt: new Date().toISOString(),
-      };
-      addEvaluation(evaluation as unknown as Record<string, unknown>);
-      toast.success(`ประเมิน ${evaluateeName} แล้ว`);
-    }
+    const payload: Record<string, unknown> = {
+      ...(isEditing && existingEval ? { id: existingEval.id } : { id: generateId() }),
+      teamId,
+      evaluatorId: currentUser.id,
+      evaluateeId: evaluatee.id,
+      score,
+      criteriaScores: criteria,
+      comment: comment.trim(),
+      submittedAt: new Date().toISOString(),
+    };
+
+    addEvaluation(payload).then(() => {
+      if (isEditing) {
+        toast.success(`แก้ไขการประเมิน ${evaluateeName} แล้ว`);
+        setIsEditing(false);
+      } else {
+        toast.success(`ประเมิน ${evaluateeName} แล้ว`);
+      }
+    }).catch(() => {
+      toast.error("เกิดข้อผิดพลาด กรุณาลองใหม่");
+    });
   };
 
   if (alreadyEvaluated && existingEval && !isEditing) {

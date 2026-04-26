@@ -1,15 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useAuthStore,
   useTeamStore,
   useMeetingStore,
   useNotificationStore,
 } from "@/store";
-import { Meeting, MeetingNotificationSetting } from "@/types";
-import { mockUsers } from "@/lib/mockData";
+import { useProfileStore } from "@/store/profileStore";
 import { useDisplayName } from "@/lib/useDisplayName";
+import { Meeting, MeetingNotificationSetting } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,11 +66,6 @@ const PRESET_NOTIFICATIONS: { minutesBefore: number; label: string }[] = [
   { minutesBefore: 15, label: "15 นาทีก่อน" },
 ];
 
-function formatDatetime(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
-}
-
 interface MeetingFormState {
   topic: string;
   description: string;
@@ -93,20 +88,32 @@ export default function StudentMeetingPage() {
   const { currentUser } = useAuthStore();
   const { teams } = useTeamStore();
   const resolveDisplayName = useDisplayName();
-  const { meetings, addMeeting, updateMeeting, deleteMeeting } = useMeetingStore();
+  const { meetings, fetchMeetings, addMeeting, updateMeeting, deleteMeeting } = useMeetingStore();
   const { addNotification } = useNotificationStore();
+  const { getProfile, fetchProfile } = useProfileStore();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Meeting | null>(null);
   const [form, setForm] = useState<MeetingFormState>(EMPTY_FORM);
 
-  if (!currentUser) return null;
-
-  const activeTeamId = currentUser.activeTeamId ?? null;
+  const activeTeamId = currentUser?.activeTeamId ?? null;
   const activeTeam = teams.find((t) => t.id === activeTeamId);
-  const memberIds = activeTeam ? activeTeam.members.map((m) => m.userId) : [];
-  const members = mockUsers.filter((u) => memberIds.includes(u.id));
+  const memberIds = activeTeam?.members.map((m) => m.userId) ?? [];
+
+  useEffect(() => {
+    if (!activeTeamId) return;
+    fetchMeetings(activeTeamId).catch(() => {});
+  }, [activeTeamId]);
+
+  useEffect(() => {
+    memberIds.forEach((id) => {
+      if (!getProfile(id)) fetchProfile(id).catch(() => {});
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTeamId]);
+
+  if (!currentUser) return null;
 
   const teamMeetings = meetings
     .filter((m) => m.teamId === activeTeamId)
@@ -123,13 +130,12 @@ export default function StudentMeetingPage() {
 
   const openEdit = (meeting: Meeting) => {
     setEditingMeeting(meeting);
-    const localDatetime = new Date(meeting.datetime).toISOString().slice(0, 16);
     setForm({
       topic: meeting.topic,
       description: meeting.description ?? "",
       attendeeIds: meeting.attendeeIds,
       link: meeting.link ?? "",
-      datetime: localDatetime,
+      datetime: new Date(meeting.datetime).toISOString().slice(0, 16),
       notificationSettings: meeting.notificationSettings,
     });
     setFormOpen(true);
@@ -147,70 +153,72 @@ export default function StudentMeetingPage() {
   const toggleNotification = (preset: { minutesBefore: number; label: string }) => {
     setForm((prev) => {
       const exists = prev.notificationSettings.some((n) => n.minutesBefore === preset.minutesBefore);
-      if (exists) {
-        return { ...prev, notificationSettings: prev.notificationSettings.filter((n) => n.minutesBefore !== preset.minutesBefore) };
-      } else {
-        return { ...prev, notificationSettings: [...prev.notificationSettings, { id: generateId(), minutesBefore: preset.minutesBefore, label: preset.label }] };
-      }
+      return {
+        ...prev,
+        notificationSettings: exists
+          ? prev.notificationSettings.filter((n) => n.minutesBefore !== preset.minutesBefore)
+          : [...prev.notificationSettings, { id: generateId(), minutesBefore: preset.minutesBefore, label: preset.label }],
+      };
     });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.topic.trim()) { toast.error("กรุณากรอกหัวข้อการประชุม"); return; }
     if (!form.datetime) { toast.error("กรุณาเลือกวันและเวลาการประชุม"); return; }
     if (!activeTeamId) return;
 
-    if (editingMeeting) {
-      const updated: Meeting = {
-        ...editingMeeting,
-        topic: form.topic.trim(),
-        description: form.description.trim() || undefined,
-        attendeeIds: form.attendeeIds,
-        link: form.link.trim() ? normalizeUrl(form.link.trim()) : undefined,
-        datetime: new Date(form.datetime).toISOString(),
-        notificationSettings: form.notificationSettings,
-      };
-      updateMeeting(updated.id, updated as unknown as Record<string, unknown>);
-      toast.success("แก้ไขการประชุมแล้ว");
-    } else {
-      const meeting: Meeting = {
-        id: generateId(),
-        teamId: activeTeamId,
-        topic: form.topic.trim(),
-        description: form.description.trim() || undefined,
-        attendeeIds: form.attendeeIds,
-        link: form.link.trim() ? normalizeUrl(form.link.trim()) : undefined,
-        datetime: new Date(form.datetime).toISOString(),
-        notificationSettings: form.notificationSettings,
-        createdBy: currentUser.id,
-        createdAt: new Date().toISOString(),
-      };
-      addMeeting(meeting as unknown as Record<string, unknown>);
-
-      form.attendeeIds.forEach((userId) => {
-        if (userId === currentUser.id) return;
-        addNotification({
-          id: generateId(),
-          userId,
-          type: "meeting_reminder",
-          message: `คุณถูกเพิ่มเข้าการประชุม: ${form.topic.trim()}`,
-          read: false,
-          createdAt: new Date().toISOString(),
-          meta: { teamId: activeTeamId, meetingId: meeting.id },
+    try {
+      if (editingMeeting) {
+        await updateMeeting(editingMeeting.id, {
+          topic: form.topic.trim(),
+          description: form.description.trim() || undefined,
+          attendeeIds: form.attendeeIds,
+          link: form.link.trim() ? normalizeUrl(form.link.trim()) : undefined,
+          datetime: new Date(form.datetime).toISOString(),
         });
-      });
+        toast.success("แก้ไขการประชุมแล้ว");
+      } else {
+        const meeting = await addMeeting({
+          teamId: activeTeamId,
+          topic: form.topic.trim(),
+          description: form.description.trim() || undefined,
+          attendeeIds: form.attendeeIds,
+          link: form.link.trim() ? normalizeUrl(form.link.trim()) : undefined,
+          datetime: new Date(form.datetime).toISOString(),
+          notificationSettings: form.notificationSettings,
+        });
 
-      toast.success("สร้างการประชุมแล้ว");
+        form.attendeeIds.forEach((userId) => {
+          if (userId === currentUser.id) return;
+          addNotification({
+            id: generateId(),
+            userId,
+            type: "meeting_reminder",
+            message: `คุณถูกเพิ่มเข้าการประชุม: ${form.topic.trim()}`,
+            read: false,
+            createdAt: new Date().toISOString(),
+            meta: { teamId: activeTeamId, meetingId: meeting.id },
+          });
+        });
+
+        toast.success("สร้างการประชุมแล้ว");
+      }
+
+      setFormOpen(false);
+      setEditingMeeting(null);
+      setForm(EMPTY_FORM);
+    } catch {
+      toast.error("เกิดข้อผิดพลาด กรุณาลองใหม่");
     }
-
-    setFormOpen(false);
-    setEditingMeeting(null);
-    setForm(EMPTY_FORM);
   };
 
-  const handleDelete = (meeting: Meeting) => {
-    deleteMeeting(meeting.id);
-    toast.success("ลบการประชุมแล้ว");
+  const handleDelete = async (meeting: Meeting) => {
+    try {
+      await deleteMeeting(meeting.id);
+      toast.success("ลบการประชุมแล้ว");
+    } catch {
+      toast.error("เกิดข้อผิดพลาด กรุณาลองใหม่");
+    }
     setDeleteTarget(null);
   };
 
@@ -264,6 +272,7 @@ export default function StudentMeetingPage() {
         </>
       )}
 
+      {/* Form dialog */}
       <Dialog open={formOpen} onOpenChange={(v) => { if (!v) { setFormOpen(false); setForm(EMPTY_FORM); } }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -290,17 +299,17 @@ export default function StudentMeetingPage() {
             <div className="space-y-2">
               <Label>ผู้เข้าร่วม</Label>
               <div className="grid grid-cols-1 gap-1">
-                {members.map((m) => {
-                  const checked = form.attendeeIds.includes(m.id);
+                {memberIds.map((memberId) => {
+                  const checked = form.attendeeIds.includes(memberId);
                   return (
                     <button
-                      key={m.id}
+                      key={memberId}
                       type="button"
-                      onClick={() => toggleAttendee(m.id)}
+                      onClick={() => toggleAttendee(memberId)}
                       className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors text-left ${checked ? "bg-primary/10 border border-primary/30" : "hover:bg-muted border border-transparent"}`}
                     >
                       {checked ? <CheckSquare className="w-4 h-4 text-primary shrink-0" /> : <Square className="w-4 h-4 text-muted-foreground shrink-0" />}
-                      <span>{resolveDisplayName(m.id, m.name, activeTeamId ?? "")}</span>
+                      <span>{resolveDisplayName(memberId, memberId, activeTeamId ?? "")}</span>
                     </button>
                   );
                 })}
@@ -369,8 +378,6 @@ function MeetingCard({
   past?: boolean;
 }) {
   const resolveDisplayName = useDisplayName();
-  const attendees = meeting.attendeeIds.map((id) => mockUsers.find((u) => u.id === id)).filter(Boolean) as (typeof mockUsers)[0][];
-  const createdBy = mockUsers.find((u) => u.id === meeting.createdBy);
 
   return (
     <Card className={past ? "opacity-70" : ""}>
@@ -396,10 +403,12 @@ function MeetingCard({
           <Calendar className="w-3.5 h-3.5 shrink-0" />
           <span>{new Date(meeting.datetime).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}</span>
         </div>
-        {attendees.length > 0 && (
+        {meeting.attendeeIds.length > 0 && (
           <div className="flex items-center gap-2 text-muted-foreground">
             <Users className="w-3.5 h-3.5 shrink-0" />
-            <span className="text-sm">{attendees.map((a) => resolveDisplayName(a.id, a.name, meeting.teamId)).join(", ")}</span>
+            <span className="text-sm">
+              {meeting.attendeeIds.map((id) => resolveDisplayName(id, id, meeting.teamId)).join(", ")}
+            </span>
           </div>
         )}
         {meeting.link && (
@@ -414,7 +423,11 @@ function MeetingCard({
             <span className="text-xs">แจ้งเตือน: {meeting.notificationSettings.sort((a, b) => b.minutesBefore - a.minutesBefore).map((n) => n.label).join(", ")}</span>
           </div>
         )}
-        {createdBy && <p className="text-xs text-muted-foreground">สร้างโดย: {resolveDisplayName(createdBy.id, createdBy.name, meeting.teamId)}</p>}
+        {meeting.createdBy && (
+          <p className="text-xs text-muted-foreground">
+            สร้างโดย: {resolveDisplayName(meeting.createdBy, meeting.createdBy, meeting.teamId)}
+          </p>
+        )}
       </CardContent>
     </Card>
   );

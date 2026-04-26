@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuthStore, useTaskStore, useTeamStore, useLinkStore, useTagStore } from "@/store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,10 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, PlusCircle, Trash2, Link2, KanbanSquare, Tag, X } from "lucide-react";
 import { toast } from "sonner";
-
-function generateId() {
-  return Math.random().toString(36).substring(2, 11);
-}
 
 function normalizeUrl(url: string): string {
   if (!url) return url;
@@ -24,8 +20,8 @@ export default function StudentLinksPage() {
   const { currentUser } = useAuthStore();
   const { tasks } = useTaskStore();
   const { teams } = useTeamStore();
-  const { links, addLink, removeLink } = useLinkStore();
-  const { tags, addTag, removeTag, getTagsByTeam, getNextColor } = useTagStore();
+  const { links, fetchLinks, addLink, removeLink } = useLinkStore();
+  const { fetchTags, addTag, removeTag, getTagsByTeam, getNextColor } = useTagStore();
 
   const [newLabel, setNewLabel] = useState("");
   const [newUrl, setNewUrl] = useState("");
@@ -34,9 +30,16 @@ export default function StudentLinksPage() {
   const [filterTagId, setFilterTagId] = useState<string | null>(null);
   const [showTagManager, setShowTagManager] = useState(false);
 
-  if (!currentUser) return null;
+  const activeTeamId = currentUser?.activeTeamId ?? null;
 
-  const activeTeamId = currentUser.activeTeamId ?? null;
+  useEffect(() => {
+    if (!activeTeamId) return;
+    fetchLinks(activeTeamId).catch(() => {});
+    fetchTags(activeTeamId).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTeamId]);
+
+  if (!currentUser) return null;
   const activeTeam = teams.find((t) => t.id === activeTeamId);
   const teamTags = activeTeamId ? getTagsByTeam(activeTeamId) : [];
 
@@ -89,18 +92,19 @@ export default function StudentLinksPage() {
       return;
     }
     addLink({
-      id: generateId(),
       teamId: activeTeamId,
       label: newLabel.trim(),
       url: normalizeUrl(newUrl.trim()),
-      createdAt: new Date().toISOString(),
       createdBy: currentUser.id,
       tags: selectedTagIds,
+    }).then(() => {
+      setNewLabel("");
+      setNewUrl("");
+      setSelectedTagIds([]);
+      toast.success("เพิ่มลิงก์แล้ว");
+    }).catch(() => {
+      toast.error("เกิดข้อผิดพลาด กรุณาลองใหม่");
     });
-    setNewLabel("");
-    setNewUrl("");
-    setSelectedTagIds([]);
-    toast.success("เพิ่มลิงก์แล้ว");
   };
 
   const handleAddTag = () => {

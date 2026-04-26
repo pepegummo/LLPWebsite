@@ -81,7 +81,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
     if (!ws) return null;
     if (ws.ownerId === userId) return "owner";
     if (ws.adminIds.includes(userId)) return "admin";
-    return null;
+    return "member";
   },
 
   getWorkspacesByUser: (userId) =>

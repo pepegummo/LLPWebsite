@@ -2,7 +2,7 @@
 
 import { Evaluation, EvaluationCriteria } from "@/types";
 import { useRubricStore } from "@/store";
-import { mockUsers } from "@/lib/mockData";
+import { useProfileStore } from "@/store/profileStore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Star } from "lucide-react";
@@ -20,6 +20,7 @@ const CRITERIA_LABELS: { key: keyof EvaluationCriteria; label: string }[] = [
 interface EvalResultsTableProps {
   evaluations: Evaluation[];
   groupId: string;
+  teamId?: string;
 }
 
 function StarRow({ score }: { score: number }) {
@@ -40,9 +41,13 @@ function StarRow({ score }: { score: number }) {
   );
 }
 
-export function EvalResultsTable({ evaluations, groupId }: EvalResultsTableProps) {
+export function EvalResultsTable({ evaluations, groupId, teamId }: EvalResultsTableProps) {
   const { getWeights } = useRubricStore();
+  const { getDisplayName } = useProfileStore();
   const weights = getWeights(groupId);
+
+  const resolveName = (userId: string) =>
+    getDisplayName(userId, teamId ?? groupId, userId);
 
   if (evaluations.length === 0) {
     return (
@@ -64,7 +69,6 @@ export function EvalResultsTable({ evaluations, groupId }: EvalResultsTableProps
         {evaluateeIds.map((evaluateeId) => {
           const evals = evaluations.filter((e) => e.evaluateeId === evaluateeId);
           const avg = evals.reduce((s, e) => s + e.score, 0) / evals.length;
-          const user = mockUsers.find((u) => u.id === evaluateeId);
 
           // Per-criteria averages
           const criteriaAvgs = CRITERIA_LABELS.map(({ key, label }) => {
@@ -83,7 +87,7 @@ export function EvalResultsTable({ evaluations, groupId }: EvalResultsTableProps
             <Card key={evaluateeId}>
               <CardContent className="p-4 space-y-3">
                 <div>
-                  <p className="font-medium text-sm">{user?.name ?? evaluateeId}</p>
+                  <p className="font-medium text-sm">{resolveName(evaluateeId)}</p>
                   <div className="flex items-center gap-1 mt-1">
                     <StarRow score={avg} />
                     <span className="text-sm font-semibold ml-1">
@@ -127,21 +131,17 @@ export function EvalResultsTable({ evaluations, groupId }: EvalResultsTableProps
       {/* Detailed list */}
       <div className="space-y-2">
         {evaluations.map((e) => {
-          const evaluator = mockUsers.find((u) => u.id === e.evaluatorId);
-          const evaluatee = mockUsers.find((u) => u.id === e.evaluateeId);
+          const evaluatorName = resolveName(e.evaluatorId);
+          const evaluateeName = resolveName(e.evaluateeId);
 
           return (
             <Card key={e.id} className="text-sm">
               <CardContent className="p-3 space-y-2">
                 <div className="flex flex-wrap items-start gap-2 justify-between">
                   <div>
-                    <span className="text-muted-foreground">
-                      {evaluator?.name ?? e.evaluatorId}
-                    </span>
+                    <span className="text-muted-foreground">{evaluatorName}</span>
                     <span className="mx-2 text-muted-foreground">→</span>
-                    <span className="font-medium">
-                      {evaluatee?.name ?? e.evaluateeId}
-                    </span>
+                    <span className="font-medium">{evaluateeName}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <StarRow score={e.score} />

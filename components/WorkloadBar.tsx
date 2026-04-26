@@ -1,7 +1,6 @@
 "use client";
 
 import { Task } from "@/types";
-import { mockUsers } from "@/lib/mockData";
 import { useDisplayName } from "@/lib/useDisplayName";
 
 interface WorkloadBarProps {
@@ -12,21 +11,20 @@ interface WorkloadBarProps {
 
 export function WorkloadBar({ tasks, memberIds, teamId }: WorkloadBarProps) {
   const resolveDisplayName = useDisplayName();
-  const members = mockUsers.filter((u) => memberIds.includes(u.id));
 
-  if (members.length === 0) return null;
+  if (memberIds.length === 0) return null;
 
   return (
     <div className="space-y-3">
-      {members.map((member) => {
-        const memberTasks = tasks.filter((t) => t.assigneeIds.includes(member.id));
+      {memberIds.map((memberId) => {
+        const memberTasks = tasks.filter((t) => t.assigneeIds.includes(memberId));
         const doneTasks = memberTasks.filter((t) => t.status === "done");
         const totalHours = memberTasks.reduce(
-          (sum, t) => sum + (t.manHours ?? 1),
+          (sum, t) => sum + (t.manHours ?? 0),
           0
         );
         const doneHours = doneTasks.reduce(
-          (sum, t) => sum + (t.manHours ?? 1),
+          (sum, t) => sum + (t.manHours ?? 0),
           0
         );
         const pct =
@@ -35,9 +33,9 @@ export function WorkloadBar({ tasks, memberIds, teamId }: WorkloadBarProps) {
             : Math.round((doneTasks.length / memberTasks.length) * 100);
 
         return (
-          <div key={member.id} className="space-y-1">
+          <div key={memberId} className="space-y-1">
             <div className="flex items-center justify-between text-sm">
-              <span>{resolveDisplayName(member.id, member.name, teamId)}</span>
+              <span>{resolveDisplayName(memberId, memberId, teamId)}</span>
               <span className="text-muted-foreground text-xs">
                 {doneTasks.length}/{memberTasks.length} งาน ({pct}%)
                 {totalHours > 0 && (
